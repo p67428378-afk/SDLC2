@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#0b1326] text-[#dae2fd];
+  }
+}
+
+/* Custom styles from Stitch HTML */
+.card-surface {
+  background-color: #171f33; /* Level 1 Surface */
+  border: 1px solid #2d3449;
+}
+.card-surface:hover {
+  border-color: #8083ff;
+  transition: border-color 0.2s ease-in-out;
+}
+.input-surface {
+  background-color: #0b1326;
+  border: 1px solid #2d3449;
+}
+.input-surface:focus-within {
+  border-color: #8083ff;
+}
+
+/* Custom Area Chart SVG CSS */
+.chart-line {
+  fill: none;
+  stroke: #8083ff;
+  stroke-width: 2;
+}
+.chart-area {
+  fill: url(#indigo-gradient);
+  opacity: 0.2;
+}
+.chart-grid {
+  stroke: #2d3449;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.chart-text {
+  fill: #908fa0;
+  font-size: 10px;
+  font-family: "Geist", sans-serif;
+}
