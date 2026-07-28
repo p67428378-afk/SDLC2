@@ -27,12 +27,28 @@ except ImportError:
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+_keep_alive_connection = None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _create_schema_once_dev():
+    global _keep_alive_connection
+    # If it's a SQLite database, keep a connection open to prevent in-memory DB from being destroyed
+    if "sqlite" in str(engine.url):
+        try:
+            _keep_alive_connection = engine.connect()
+        except Exception:
+            pass
+
     # Import models first so they register on Base.metadata
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+    if _keep_alive_connection:
+        try:
+            _keep_alive_connection.close()
+        except Exception:
+            pass
 
 
 @pytest.fixture(autouse=True)
