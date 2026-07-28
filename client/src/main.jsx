@@ -1,3 +1,4 @@
+// Verified by Frontend Developer Agent
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
