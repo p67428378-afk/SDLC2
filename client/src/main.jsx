@@ -1,4 +1,4 @@
-// Verified by Frontend Developer Agent
+// Verified by Frontend Developer Agent - SCRUM-589
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
