@@ -1,18 +1,26 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 from server.database import Base, get_db, seed_data
 from server.main import app
 
-TEST_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(
-    TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Try to import from test_acceptance_qa if it exists in the python path to share the same engine and session
+try:
+    import test_acceptance_qa
+
+    engine = test_acceptance_qa.engine
+    TestingSessionLocal = test_acceptance_qa.TestingSessionLocal
+except ImportError:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    TEST_DATABASE_URL = "sqlite:///:memory:"
+    engine = create_engine(
+        TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture(scope="session", autouse=True)
