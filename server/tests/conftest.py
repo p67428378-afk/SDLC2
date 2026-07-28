@@ -1,11 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
 from server.database import Base, get_db, seed_data
+
+# Import models first so they register on Base.metadata
 from server.main import app
 
 # Try to import from test_acceptance_qa if it exists in the python path to share the same engine and session
 try:
-    import test_acceptance_qa
+    import importlib
+
+    test_acceptance_qa = importlib.import_module("test_acceptance_qa")
 
     engine = test_acceptance_qa.engine
     TestingSessionLocal = test_acceptance_qa.TestingSessionLocal
@@ -24,7 +28,7 @@ except ImportError:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _create_schema_once():
+def _create_schema_once_dev():
     # Import models first so they register on Base.metadata
     Base.metadata.create_all(bind=engine)
     yield
@@ -32,7 +36,7 @@ def _create_schema_once():
 
 
 @pytest.fixture(autouse=True)
-def _clean_tables():
+def _clean_tables_dev():
     """Function-scoped: wipe DATA (not schema) between tests so state doesn't leak."""
     # Before test: seed the data!
     db = TestingSessionLocal()
