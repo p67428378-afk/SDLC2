@@ -12,7 +12,7 @@ export default function PaymentReviewCard({
   const { source_account_id, amount, payment_type, scheduled_date } = data;
 
   return (
-    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg md:p-xl shadow-sm flex flex-col gap-lg">
+    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl px-lg md:px-xl py-lg md:py-xl shadow-sm flex flex-col gap-lg">
       <div className="flex items-center gap-sm border-b border-outline-variant pb-md">
         <button
           onClick={onBack}

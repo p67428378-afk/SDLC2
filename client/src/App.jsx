@@ -50,7 +50,7 @@ function Login({ onLoginSuccess }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-md">
-      <div className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-xl p-lg md:p-xl shadow-sm flex flex-col gap-lg">
+      <div className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-xl px-lg md:px-xl py-lg md:py-xl shadow-sm flex flex-col gap-lg">
         <div className="flex items-center gap-sm justify-center">
           <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-lg">
             N
