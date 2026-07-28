@@ -1,0 +1,625 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nexus Bank Mortgage Payment API",
+    "description": "API for paying mortgage from DDA/Savings accounts",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/dummy-login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Dummy Login",
+        "operationId": "dummy_login_auth_dummy_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mortgage/details": {
+      "get": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Get Mortgage Details",
+        "operationId": "get_mortgage_details_api_v1_mortgage_details_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MortgageDetailsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mortgage/accounts": {
+      "get": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Get Funding Accounts",
+        "operationId": "get_funding_accounts_api_v1_mortgage_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FundingAccountResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Funding Accounts Api V1 Mortgage Accounts Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mortgage/accounts/{accountId}/validate": {
+      "post": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Validate Account Balance",
+        "operationId": "validate_account_balance_api_v1_mortgage_accounts__accountId__validate_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Accountid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountValidationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mortgage/payments": {
+      "post": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Submit Payment",
+        "operationId": "submit_payment_api_v1_mortgage_payments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSubmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSubmissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mortgage/payments/scheduled": {
+      "get": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Get Scheduled Payments",
+        "operationId": "get_scheduled_payments_api_v1_mortgage_payments_scheduled_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledPaymentResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Scheduled Payments Api V1 Mortgage Payments Scheduled Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mortgage/payments/{transactionId}/receipt": {
+      "get": {
+        "tags": [
+          "Mortgage"
+        ],
+        "summary": "Get Payment Receipt",
+        "operationId": "get_payment_receipt_api_v1_mortgage_payments__transactionId__receipt_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Transactionid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountValidationRequest": {
+        "properties": {
+          "paymentAmount": {
+            "type": "number",
+            "title": "Paymentamount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paymentAmount"
+        ],
+        "title": "AccountValidationRequest"
+      },
+      "AccountValidationResponse": {
+        "properties": {
+          "availableBalance": {
+            "type": "number",
+            "title": "Availablebalance"
+          },
+          "sufficientFunds": {
+            "type": "boolean",
+            "title": "Sufficientfunds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "availableBalance",
+          "sufficientFunds"
+        ],
+        "title": "AccountValidationResponse"
+      },
+      "FundingAccountResponse": {
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "title": "Accountid"
+          },
+          "accountName": {
+            "type": "string",
+            "title": "Accountname"
+          },
+          "accountType": {
+            "type": "string",
+            "title": "Accounttype"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accountId",
+          "accountName",
+          "accountType",
+          "balance"
+        ],
+        "title": "FundingAccountResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "MortgageDetailsResponse": {
+        "properties": {
+          "currentBalance": {
+            "type": "number",
+            "title": "Currentbalance"
+          },
+          "escrowBalance": {
+            "type": "number",
+            "title": "Escrowbalance"
+          },
+          "interestRate": {
+            "type": "number",
+            "title": "Interestrate"
+          },
+          "loanNumber": {
+            "type": "string",
+            "title": "Loannumber"
+          },
+          "minimumPaymentAmount": {
+            "type": "number",
+            "title": "Minimumpaymentamount"
+          },
+          "nextPaymentDueDate": {
+            "type": "string",
+            "title": "Nextpaymentduedate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "currentBalance",
+          "escrowBalance",
+          "interestRate",
+          "loanNumber",
+          "minimumPaymentAmount",
+          "nextPaymentDueDate"
+        ],
+        "title": "MortgageDetailsResponse"
+      },
+      "PaymentSubmissionRequest": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "fromAccountId": {
+            "type": "string",
+            "title": "Fromaccountid"
+          },
+          "loanNumber": {
+            "type": "string",
+            "title": "Loannumber"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "date",
+          "fromAccountId",
+          "loanNumber"
+        ],
+        "title": "PaymentSubmissionRequest"
+      },
+      "PaymentSubmissionResponse": {
+        "properties": {
+          "cenlarConfirmationId": {
+            "type": "string",
+            "title": "Cenlarconfirmationid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "transactionId": {
+            "type": "string",
+            "title": "Transactionid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cenlarConfirmationId",
+          "status",
+          "timestamp",
+          "transactionId"
+        ],
+        "title": "PaymentSubmissionResponse"
+      },
+      "ReceiptResponse": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "receiptId": {
+            "type": "string",
+            "title": "Receiptid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "transactionId": {
+            "type": "string",
+            "title": "Transactionid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "date",
+          "receiptId",
+          "status",
+          "transactionId"
+        ],
+        "title": "ReceiptResponse"
+      },
+      "ScheduledPaymentResponse": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "paymentDate": {
+            "type": "string",
+            "title": "Paymentdate"
+          },
+          "paymentId": {
+            "type": "string",
+            "title": "Paymentid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "paymentDate",
+          "paymentId",
+          "status"
+        ],
+        "title": "ScheduledPaymentResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/dummy-login"
+          }
+        }
+      }
+    }
+  }
+}
