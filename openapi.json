@@ -1,0 +1,719 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Unified Banking & Mortgage Dashboard API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Mfa Verify",
+        "operationId": "mfa_verify_api_v1_auth_mfa_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MFAVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Dashboard",
+        "operationId": "get_dashboard_api_v1_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounts/{accountId}": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Details",
+        "operationId": "get_account_details_api_v1_accounts__accountId__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Accountid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetailsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mock/config": {
+      "post": {
+        "tags": [
+          "mocks"
+        ],
+        "summary": "Configure Mock",
+        "operationId": "configure_mock_api_v1_mock_config_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MockConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mock/fiserv/accounts/{cifId}": {
+      "get": {
+        "tags": [
+          "mocks"
+        ],
+        "summary": "Get Fiserv Accounts",
+        "operationId": "get_fiserv_accounts_api_v1_mock_fiserv_accounts__cifId__get",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cifid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FiservResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mock/cenlar/mortgages/{customerId}": {
+      "get": {
+        "tags": [
+          "mocks"
+        ],
+        "summary": "Get Cenlar Mortgages",
+        "operationId": "get_cenlar_mortgages_api_v1_mock_cenlar_mortgages__customerId__get",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Customerid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CenlarResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Read Root",
+        "operationId": "read_root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountDetailsResponse": {
+        "properties": {
+          "accountNumber": {
+            "type": "string",
+            "title": "Accountnumber"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "institution": {
+            "type": "string",
+            "title": "Institution"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accountNumber",
+          "balance",
+          "details",
+          "id",
+          "institution",
+          "name",
+          "status",
+          "type"
+        ],
+        "title": "AccountDetailsResponse"
+      },
+      "AccountSummary": {
+        "properties": {
+          "accountNumber": {
+            "type": "string",
+            "title": "Accountnumber"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "institution": {
+            "type": "string",
+            "title": "Institution"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accountNumber",
+          "balance",
+          "id",
+          "institution",
+          "name",
+          "status",
+          "type"
+        ],
+        "title": "AccountSummary"
+      },
+      "CenlarMortgage": {
+        "properties": {
+          "accountNumber": {
+            "type": "string",
+            "title": "Accountnumber"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "escrowBalance": {
+            "type": "number",
+            "title": "Escrowbalance"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accountNumber",
+          "balance",
+          "escrowBalance",
+          "id"
+        ],
+        "title": "CenlarMortgage"
+      },
+      "CenlarResponse": {
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "title": "Customerid"
+          },
+          "mortgages": {
+            "items": {
+              "$ref": "#/components/schemas/CenlarMortgage"
+            },
+            "type": "array",
+            "title": "Mortgages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customerId",
+          "mortgages"
+        ],
+        "title": "CenlarResponse"
+      },
+      "DashboardResponse": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountSummary"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "netWorth": {
+            "type": "number",
+            "title": "Networth"
+          },
+          "totalDeposits": {
+            "type": "number",
+            "title": "Totaldeposits"
+          },
+          "totalMortgage": {
+            "type": "number",
+            "title": "Totalmortgage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "netWorth",
+          "totalDeposits",
+          "totalMortgage"
+        ],
+        "title": "DashboardResponse"
+      },
+      "FiservAccount": {
+        "properties": {
+          "accountNumber": {
+            "type": "string",
+            "title": "Accountnumber"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accountNumber",
+          "balance",
+          "id",
+          "type"
+        ],
+        "title": "FiservAccount"
+      },
+      "FiservResponse": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/FiservAccount"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "cifId": {
+            "type": "string",
+            "title": "Cifid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "cifId"
+        ],
+        "title": "FiservResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "mfa_token": {
+            "type": "string",
+            "title": "Mfa Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "mfa_token"
+        ],
+        "title": "LoginResponse"
+      },
+      "MFAVerifyRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "mfa_token": {
+            "type": "string",
+            "title": "Mfa Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "mfa_token"
+        ],
+        "title": "MFAVerifyRequest"
+      },
+      "MockConfigRequest": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario"
+        ],
+        "title": "MockConfigRequest"
+      },
+      "MockConfigResponse": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario",
+          "status"
+        ],
+        "title": "MockConfigResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "user"
+        ],
+        "title": "TokenResponse"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "UserResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/api/v1/auth/login"
+          }
+        }
+      }
+    }
+  }
+}
