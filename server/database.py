@@ -70,7 +70,7 @@ def seed_data(db):
             user = db.query(User).filter(User.email == test_email).first()
 
     # Seed Mortgage Account
-    mortgage_id = "mtg-123"
+    mortgage_id = "MTG-88492"
     mortgage = (
         db.query(MortgageAccount).filter(MortgageAccount.id == mortgage_id).first()
     )

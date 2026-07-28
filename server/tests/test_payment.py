@@ -11,10 +11,10 @@ def get_auth_headers(client):
 
 def test_get_mortgage_details(client):
     headers = get_auth_headers(client)
-    response = client.get("/api/v1/mortgages/mtg-123", headers=headers)
+    response = client.get("/api/v1/mortgages/MTG-88492", headers=headers)
     assert response.status_code == 200
     data = response.json()
-    assert data["id"] == "mtg-123"
+    assert data["id"] == "MTG-88492"
     assert data["loanNumber"] == "MTG-88492"
     assert data["outstandingBalance"] == 250000.00
 
@@ -42,7 +42,7 @@ def test_validate_payment_success(client):
         headers=headers,
         json={
             "amount": 1500.00,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -60,7 +60,7 @@ def test_validate_payment_insufficient_funds(client):
         headers=headers,
         json={
             "amount": 99999.00,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -78,7 +78,7 @@ def test_submit_payment_success(client):
         json={
             "amount": 1500.00,
             "idempotencyKey": idempotency_key,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -96,7 +96,7 @@ def test_submit_payment_success(client):
         json={
             "amount": 1500.00,
             "idempotencyKey": idempotency_key,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -114,7 +114,7 @@ def test_submit_payment_fiserv_timeout(client):
         json={
             "amount": 4999.00,  # Triggers Fiserv timeout in mock adapter
             "idempotencyKey": idempotency_key,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -132,7 +132,7 @@ def test_submit_payment_cenlar_timeout_reversal(client):
         json={
             "amount": 3999.00,  # Triggers Cenlar timeout in mock adapter
             "idempotencyKey": idempotency_key,
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "paymentDate": "2026-08-01",
             "sourceAccountId": "dda-456",
         },
@@ -152,7 +152,7 @@ def test_scheduled_payments_crud(client):
             "amount": 1500.00,
             "endDate": "2027-08-01",
             "frequency": "MONTHLY",
-            "mortgageId": "mtg-123",
+            "mortgageId": "MTG-88492",
             "sourceAccountId": "dda-456",
             "startDate": "2026-08-01",
         },
@@ -191,7 +191,7 @@ def test_scheduled_payments_crud(client):
 
 def test_get_payment_history(client):
     headers = get_auth_headers(client)
-    response = client.get("/api/v1/mortgages/mtg-123/payments", headers=headers)
+    response = client.get("/api/v1/mortgages/MTG-88492/payments", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0

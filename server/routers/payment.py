@@ -51,7 +51,8 @@ def get_mortgage_details(
     mortgage = (
         db.query(MortgageAccount)
         .filter(
-            MortgageAccount.id == id, MortgageAccount.customer_id == current_user.id
+            (MortgageAccount.id == id) | (MortgageAccount.loan_number == id),
+            MortgageAccount.customer_id == current_user.id,
         )
         .first()
     )
@@ -552,7 +553,8 @@ def get_payment_history(
     mortgage = (
         db.query(MortgageAccount)
         .filter(
-            MortgageAccount.id == id, MortgageAccount.customer_id == current_user.id
+            (MortgageAccount.id == id) | (MortgageAccount.loan_number == id),
+            MortgageAccount.customer_id == current_user.id,
         )
         .first()
     )
