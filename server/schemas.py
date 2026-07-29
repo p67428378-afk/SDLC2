@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
-from datetime import datetime, date
+from typing import List
+from datetime import date
 
 
 class UserLogin(BaseModel):
@@ -30,6 +30,13 @@ class CustomerProfile(BaseModel):
     email: str
 
 
+class ProfilePreferences(BaseModel):
+    paperless: bool
+    email_notifications: bool
+    sms_notifications: bool
+    marketing_opt_in: bool
+
+
 class UserProfileResponse(BaseModel):
     cif: str
     first_name: str
@@ -38,6 +45,25 @@ class UserProfileResponse(BaseModel):
     phone: str
     address: str
     relationship_manager: str
+    preferences: ProfilePreferences
+
+
+class UserProfileUpdateRequest(BaseModel):
+    address: str
+    email: str
+    phone: str
+    preferences: ProfilePreferences
+
+
+class ProfileChangeLogResponse(BaseModel):
+    id: str
+    user_id: str
+    changed_fields: dict
+    status: str
+    timestamp: str
+
+    class Config:
+        from_attributes = True
 
 
 class DepositAccount(BaseModel):
@@ -94,6 +120,7 @@ class SummaryResponse(BaseModel):
 
 
 # --- NEW SCHEMAS FOR PAYMENTS ---
+
 
 class MortgagePaymentRequest(BaseModel):
     source_account_id: str

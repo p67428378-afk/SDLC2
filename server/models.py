@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, Numeric, Date, ForeignKey, func
+from sqlalchemy import Column, String, DateTime, Numeric, Date, ForeignKey, func, JSON
 from sqlalchemy.orm import relationship
 from server.database import Base
 
@@ -22,8 +22,15 @@ class User(Base):
         nullable=False,
     )
 
-    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
-    scheduled_payments = relationship("ScheduledPayment", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship(
+        "Payment", back_populates="user", cascade="all, delete-orphan"
+    )
+    scheduled_payments = relationship(
+        "ScheduledPayment", back_populates="user", cascade="all, delete-orphan"
+    )
+    profile_changes = relationship(
+        "ProfileChangeLog", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Payment(Base):
@@ -59,3 +66,17 @@ class ScheduledPayment(Base):
     )
 
     user = relationship("User", back_populates="scheduled_payments")
+
+
+class ProfileChangeLog(Base):
+    __tablename__ = "profile_change_log"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    changed_fields = Column(JSON, nullable=False)
+    status = Column(String(50), nullable=False)
+    timestamp = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user = relationship("User", back_populates="profile_changes")

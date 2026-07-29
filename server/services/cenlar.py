@@ -35,10 +35,26 @@ class CenlarMockService(MortgageService):
                             "principal": 845.00,
                             "interest": 1055.00,
                             "escrow": 250.00,
-                        }
-                    ]
+                        },
+                    ],
                 }
             ]
+        }
+
+        # Seed borrower profiles
+        self.borrower_profiles = {
+            "CEN-554321": {
+                "cenlar_customer_id": "CEN-554321",
+                "address": "123 Financial Way, Suite 100, New York, NY 10001",
+                "phone": "1-800-555-0199",
+                "email": "test@example.com",
+                "preferences": {
+                    "paperless": True,
+                    "email_notifications": True,
+                    "sms_notifications": False,
+                    "marketing_opt_in": False,
+                },
+            }
         }
 
     def get_mortgages(self, customer_id: str) -> List[Dict[str, Any]]:
@@ -76,17 +92,20 @@ class CenlarMockService(MortgageService):
         principal_part = round(amount * 0.4, 2)
         interest_part = round(amount * 0.5, 2)
         escrow_part = round(amount - principal_part - interest_part, 2)
-        
+
         mort["principal_balance"] = round(mort["principal_balance"] - principal_part, 2)
         if "payment_history" not in mort:
             mort["payment_history"] = []
-        mort["payment_history"].insert(0, {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "amount": amount,
-            "principal": principal_part,
-            "interest": interest_part,
-            "escrow": escrow_part,
-        })
+        mort["payment_history"].insert(
+            0,
+            {
+                "date": datetime.utcnow().strftime("%Y-%m-%d"),
+                "amount": amount,
+                "principal": principal_part,
+                "interest": interest_part,
+                "escrow": escrow_part,
+            },
+        )
         return True
 
     def reverse_payment(self, mortgage_account_id: str, amount: float) -> bool:
@@ -99,4 +118,42 @@ class CenlarMockService(MortgageService):
             mort["payment_history"] = []
         if mort["payment_history"] and mort["payment_history"][0]["amount"] == amount:
             mort["payment_history"].pop(0)
+        return True
+
+    def get_borrower_profile(self, customer_id: str) -> Optional[Dict[str, Any]]:
+        if customer_id not in self.borrower_profiles:
+            self.borrower_profiles[customer_id] = {
+                "cenlar_customer_id": customer_id,
+                "address": "",
+                "phone": "",
+                "email": "",
+                "preferences": {
+                    "paperless": False,
+                    "email_notifications": False,
+                    "sms_notifications": False,
+                    "marketing_opt_in": False,
+                },
+            }
+        return self.borrower_profiles.get(customer_id)
+
+    def update_borrower_profile(
+        self, customer_id: str, address: str, phone: str, email: str
+    ) -> bool:
+        profile = self.get_borrower_profile(customer_id)
+        if not profile:
+            return False
+        profile["address"] = address
+        profile["phone"] = phone
+        profile["email"] = email
+        return True
+
+    def update_correspondence_preferences(
+        self, customer_id: str, preferences: Dict[str, bool]
+    ) -> bool:
+        profile = self.get_borrower_profile(customer_id)
+        if not profile:
+            return False
+        if "preferences" not in profile:
+            profile["preferences"] = {}
+        profile["preferences"].update(preferences)
         return True

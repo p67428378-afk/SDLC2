@@ -241,6 +241,74 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      },
+      "put": {
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_v1_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/profile/history": {
+      "get": {
+        "summary": "Get Profile History",
+        "operationId": "get_profile_history_api_v1_profile_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileChangeLogResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Profile History Api V1 Profile History Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/payments/sources/{mortgage_account_id}": {
@@ -899,6 +967,68 @@
         ],
         "title": "PaymentHistoryResponse"
       },
+      "ProfileChangeLogResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "changed_fields": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Changed Fields"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "changed_fields",
+          "status",
+          "timestamp"
+        ],
+        "title": "ProfileChangeLogResponse"
+      },
+      "ProfilePreferences": {
+        "properties": {
+          "paperless": {
+            "type": "boolean",
+            "title": "Paperless"
+          },
+          "email_notifications": {
+            "type": "boolean",
+            "title": "Email Notifications"
+          },
+          "sms_notifications": {
+            "type": "boolean",
+            "title": "Sms Notifications"
+          },
+          "marketing_opt_in": {
+            "type": "boolean",
+            "title": "Marketing Opt In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paperless",
+          "email_notifications",
+          "sms_notifications",
+          "marketing_opt_in"
+        ],
+        "title": "ProfilePreferences"
+      },
       "ScheduledPaymentRequest": {
         "properties": {
           "source_account_id": {
@@ -1071,6 +1201,9 @@
           "relationship_manager": {
             "type": "string",
             "title": "Relationship Manager"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ProfilePreferences"
           }
         },
         "type": "object",
@@ -1081,9 +1214,37 @@
           "email",
           "phone",
           "address",
-          "relationship_manager"
+          "relationship_manager",
+          "preferences"
         ],
         "title": "UserProfileResponse"
+      },
+      "UserProfileUpdateRequest": {
+        "properties": {
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ProfilePreferences"
+          }
+        },
+        "type": "object",
+        "required": [
+          "address",
+          "email",
+          "phone",
+          "preferences"
+        ],
+        "title": "UserProfileUpdateRequest"
       },
       "ValidationError": {
         "properties": {

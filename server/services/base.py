@@ -33,6 +33,18 @@ class CoreBankingService(ABC):
     def credit_account(self, account_id: str, amount: float) -> bool:
         pass
 
+    @abstractmethod
+    def update_customer_profile(
+        self, cif: str, address: str, phone: str, email: str
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def update_communication_preferences(
+        self, cif: str, preferences: Dict[str, bool]
+    ) -> bool:
+        pass
+
 
 class MortgageService(ABC):
     @abstractmethod
@@ -51,4 +63,20 @@ class MortgageService(ABC):
 
     @abstractmethod
     def reverse_payment(self, mortgage_account_id: str, amount: float) -> bool:
+        pass
+
+    @abstractmethod
+    def get_borrower_profile(self, customer_id: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def update_borrower_profile(
+        self, customer_id: str, address: str, phone: str, email: str
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def update_correspondence_preferences(
+        self, customer_id: str, preferences: Dict[str, bool]
+    ) -> bool:
         pass

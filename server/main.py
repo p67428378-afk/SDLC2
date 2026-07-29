@@ -14,6 +14,8 @@ from server.schemas import (
     DashboardResponse,
     SummaryResponse,
     UserProfileResponse,
+    UserProfileUpdateRequest,
+    ProfileChangeLogResponse,
     DepositAccount,
     MortgagePaymentRequest,
     MortgagePaymentResponse,
@@ -33,12 +35,14 @@ from server.services.fiserv import FiservMockService
 from server.services.cenlar import CenlarMockService
 from server.services.aggregation import AggregationService
 from server.services.payment_orchestration import PaymentOrchestrationService
+from server.services.profile_sync import ProfileSyncService
 
 # Initialize mock services
 fiserv_service = FiservMockService()
 cenlar_service = CenlarMockService()
 aggregation_service = AggregationService(fiserv_service, cenlar_service)
 payment_orchestrator = PaymentOrchestrationService(fiserv_service, cenlar_service)
+profile_sync_service = ProfileSyncService(fiserv_service, cenlar_service)
 
 from contextlib import asynccontextmanager
 
@@ -167,12 +171,56 @@ def get_profile(current_user: User = Depends(get_current_user)):
     return profile
 
 
+@app.put("/api/v1/profile", response_model=UserProfileResponse)
+def update_profile(
+    payload: UserProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return profile_sync_service.sync_profile(
+        db=db,
+        user=current_user,
+        address=payload.address,
+        phone=payload.phone,
+        email=payload.email,
+        preferences=payload.preferences.dict(),
+    )
+
+
+@app.get("/api/v1/profile/history", response_model=List[ProfileChangeLogResponse])
+def get_profile_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from server.models import ProfileChangeLog
+
+    history = (
+        db.query(ProfileChangeLog)
+        .filter(ProfileChangeLog.user_id == current_user.id)
+        .order_by(ProfileChangeLog.timestamp.desc())
+        .all()
+    )
+    return [
+        {
+            "id": log.id,
+            "user_id": log.user_id,
+            "changed_fields": log.changed_fields,
+            "status": log.status,
+            "timestamp": log.timestamp.isoformat(),
+        }
+        for log in history
+    ]
+
+
 # --- NEW PAYMENT ENDPOINTS ---
 
-@app.get("/api/v1/payments/sources/{mortgage_account_id}", response_model=List[DepositAccount])
+
+@app.get(
+    "/api/v1/payments/sources/{mortgage_account_id}",
+    response_model=List[DepositAccount],
+)
 def get_payment_sources(
-    mortgage_account_id: str,
-    current_user: User = Depends(get_current_user)
+    mortgage_account_id: str, current_user: User = Depends(get_current_user)
 ):
     return payment_orchestrator.get_eligible_sources(current_user, mortgage_account_id)
 
@@ -182,7 +230,7 @@ def execute_mortgage_payment(
     payload: MortgagePaymentRequest,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     return payment_orchestrator.execute_payment(
         db=db,
@@ -190,14 +238,13 @@ def execute_mortgage_payment(
         idempotency_key=idempotency_key,
         source_account_id=payload.source_account_id,
         mortgage_account_id=payload.mortgage_account_id,
-        amount=payload.amount
+        amount=payload.amount,
     )
 
 
 @app.get("/api/v1/payments", response_model=List[PaymentHistoryResponse])
 def get_payment_history(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     history = payment_orchestrator.get_payment_history(db, current_user)
     return [
@@ -209,7 +256,7 @@ def get_payment_history(
             "amount": float(p.amount),
             "status": p.status,
             "confirmation_number": p.confirmation_number,
-            "created_at": p.created_at.isoformat()
+            "created_at": p.created_at.isoformat(),
         }
         for p in history
     ]
@@ -219,7 +266,7 @@ def get_payment_history(
 def schedule_payment(
     payload: ScheduledPaymentRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     sp = payment_orchestrator.schedule_payment(
         db=db,
@@ -227,7 +274,7 @@ def schedule_payment(
         source_account_id=payload.source_account_id,
         mortgage_account_id=payload.mortgage_account_id,
         amount=payload.amount,
-        scheduled_date=payload.scheduled_date
+        scheduled_date=payload.scheduled_date,
     )
     return {
         "id": sp.id,
@@ -237,14 +284,13 @@ def schedule_payment(
         "amount": float(sp.amount),
         "scheduled_date": sp.scheduled_date.isoformat(),
         "status": sp.status,
-        "created_at": sp.created_at.isoformat()
+        "created_at": sp.created_at.isoformat(),
     }
 
 
 @app.get("/api/v1/payments/scheduled", response_model=List[ScheduledPaymentResponse])
 def get_scheduled_payments(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     sps = payment_orchestrator.get_scheduled_payments(db, current_user)
     return [
@@ -256,20 +302,22 @@ def get_scheduled_payments(
             "amount": float(sp.amount),
             "scheduled_date": sp.scheduled_date.isoformat(),
             "status": sp.status,
-            "created_at": sp.created_at.isoformat()
+            "created_at": sp.created_at.isoformat(),
         }
         for sp in sps
     ]
 
 
-@app.delete("/api/v1/payments/scheduled/{payment_id}", response_model=CancelScheduledPaymentResponse)
+@app.delete(
+    "/api/v1/payments/scheduled/{payment_id}",
+    response_model=CancelScheduledPaymentResponse,
+)
 def cancel_scheduled_payment(
     payment_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    success = payment_orchestrator.cancel_scheduled_payment(db, current_user, payment_id)
-    return {
-        "message": "Scheduled payment cancelled successfully",
-        "success": success
-    }
+    success = payment_orchestrator.cancel_scheduled_payment(
+        db, current_user, payment_id
+    )
+    return {"message": "Scheduled payment cancelled successfully", "success": success}

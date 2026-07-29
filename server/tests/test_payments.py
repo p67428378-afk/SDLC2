@@ -1,20 +1,17 @@
-import pytest
 from datetime import datetime, timedelta
 
 
 def get_auth_headers(client, username="test@example.com", password="testpassword"):
     # Login
     response = client.post(
-        "/api/v1/auth/login",
-        json={"username": username, "password": password}
+        "/api/v1/auth/login", json={"username": username, "password": password}
     )
     assert response.status_code == 200
     mfa_token = response.json()["mfa_token"]
 
     # Verify MFA
     response = client.post(
-        "/api/v1/auth/verify-mfa",
-        json={"mfa_token": mfa_token, "code": "123456"}
+        "/api/v1/auth/verify-mfa", json={"mfa_token": mfa_token, "code": "123456"}
     )
     assert response.status_code == 200
     access_token = response.json()["access_token"]
@@ -23,10 +20,7 @@ def get_auth_headers(client, username="test@example.com", password="testpassword
 
 def test_get_payment_sources(client):
     headers = get_auth_headers(client)
-    response = client.get(
-        "/api/v1/payments/sources/cenlar-mort-1",
-        headers=headers
-    )
+    response = client.get("/api/v1/payments/sources/cenlar-mort-1", headers=headers)
     assert response.status_code == 200
     sources = response.json()
     # Should only return DDA and Savings (exclude CD and Loan)
@@ -46,8 +40,7 @@ def test_get_payment_sources_unauthorized(client):
 def test_get_payment_sources_not_found(client):
     headers = get_auth_headers(client)
     response = client.get(
-        "/api/v1/payments/sources/non-existent-mortgage",
-        headers=headers
+        "/api/v1/payments/sources/non-existent-mortgage", headers=headers
     )
     assert response.status_code == 404
 
@@ -75,15 +68,15 @@ def test_successful_payment(client):
         json={
             "source_account_id": "fiserv-dda-1",
             "mortgage_account_id": "cenlar-mort-1",
-            "amount": payment_amount
-        }
+            "amount": payment_amount,
+        },
     )
     assert response.status_code == 200
     data = response.json()
     assert data["amount"] == payment_amount
     assert "confirmation_number" in data
     assert data["updated_source_balance"] == initial_dda_balance - payment_amount
-    
+
     # Principal reduction is 40% of payment amount (1000 * 0.4 = 400)
     expected_mort_balance = initial_mort_balance - 400.00
     assert data["updated_mortgage_balance"] == expected_mort_balance
@@ -110,8 +103,8 @@ def test_insufficient_balance_rejection(client):
         json={
             "source_account_id": "fiserv-dda-1",
             "mortgage_account_id": "cenlar-mort-1",
-            "amount": payment_amount
-        }
+            "amount": payment_amount,
+        },
     )
     assert response.status_code == 400
     assert "Insufficient funds" in response.json()["detail"]
@@ -124,7 +117,7 @@ def test_idempotency(client):
     payload = {
         "source_account_id": "fiserv-dda-1",
         "mortgage_account_id": "cenlar-mort-1",
-        "amount": 100.00
+        "amount": 100.00,
     }
 
     # First request
@@ -148,7 +141,7 @@ def test_schedule_and_cancel_payment(client):
         "source_account_id": "fiserv-dda-1",
         "mortgage_account_id": "cenlar-mort-1",
         "amount": 500.00,
-        "scheduled_date": future_date
+        "scheduled_date": future_date,
     }
 
     # Schedule
@@ -168,7 +161,9 @@ def test_schedule_and_cancel_payment(client):
     assert scheduled_list[0]["id"] == payment_id
 
     # Cancel
-    response = client.delete(f"/api/v1/payments/scheduled/{payment_id}", headers=headers)
+    response = client.delete(
+        f"/api/v1/payments/scheduled/{payment_id}", headers=headers
+    )
     assert response.status_code == 200
     assert response.json()["success"] is True
 
