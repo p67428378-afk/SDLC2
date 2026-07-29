@@ -10,6 +10,10 @@ import DashboardPage from "./pages/DashboardPage";
 import AccountSummaryPage from "./pages/AccountSummaryPage";
 import RelationshipOverviewPage from "./pages/RelationshipOverviewPage";
 import AccountDetailPage from "./pages/AccountDetailPage";
+import MakePaymentPage from "./pages/MakePaymentPage";
+import PaymentReviewPage from "./pages/PaymentReviewPage";
+import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
+import ScheduledPaymentsPage from "./pages/ScheduledPaymentsPage";
 import { authService } from "./services/api";
 
 function ProtectedRoute({ children }) {
@@ -54,6 +58,38 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AccountDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/make-payment"
+          element={
+            <ProtectedRoute>
+              <MakePaymentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment-review"
+          element={
+            <ProtectedRoute>
+              <PaymentReviewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment-confirmation"
+          element={
+            <ProtectedRoute>
+              <PaymentConfirmationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/scheduled-payments"
+          element={
+            <ProtectedRoute>
+              <ScheduledPaymentsPage />
             </ProtectedRoute>
           }
         />

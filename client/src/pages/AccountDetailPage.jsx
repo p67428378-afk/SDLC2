@@ -358,6 +358,15 @@ export default function AccountDetailPage() {
               settings.
             </p>
             <div className="space-y-3">
+              {isMortgage && (
+                <button
+                  onClick={() => navigate(`/make-payment?id=${account.id}`)}
+                  className="w-full bg-primary text-on-primary font-label-md py-3 px-4 rounded-xl hover:bg-primary-container transition-colors flex justify-center items-center gap-2 mb-2"
+                >
+                  <span className="material-symbols-outlined">payments</span>
+                  Make Payment
+                </button>
+              )}
               <button className="w-full text-left px-4 py-3 border border-outline-variant rounded-xl hover:bg-surface-container transition-colors flex justify-between items-center">
                 <span className="font-label-md text-on-surface">
                   View Statements

@@ -96,6 +96,20 @@ export default function Sidebar({ userProfile }) {
           <span className="material-symbols-outlined">analytics</span>
           <span className="font-label-md">Account Details</span>
         </NavLink>
+
+        <NavLink
+          to="/scheduled-payments"
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
+              isActive
+                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
+                : "text-secondary hover:bg-surface-container"
+            }`
+          }
+        >
+          <span className="material-symbols-outlined">calendar_month</span>
+          <span className="font-label-md">Scheduled Payments</span>
+        </NavLink>
       </nav>
 
       {/* CTA & Footer */}
