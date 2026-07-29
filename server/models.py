@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, func
+from sqlalchemy import Column, String, DateTime, Numeric, Date, ForeignKey, func
+from sqlalchemy.orm import relationship
 from server.database import Base
 
 
@@ -20,3 +21,41 @@ class User(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    scheduled_payments = relationship("ScheduledPayment", back_populates="user", cascade="all, delete-orphan")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    idempotency_key = Column(String(36), unique=True, nullable=False)
+    source_account_id = Column(String(255), nullable=False)
+    mortgage_account_id = Column(String(255), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
+    status = Column(String(50), nullable=False)
+    confirmation_number = Column(String(255), unique=True, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user = relationship("User", back_populates="payments")
+
+
+class ScheduledPayment(Base):
+    __tablename__ = "scheduled_payments"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    source_account_id = Column(String(255), nullable=False)
+    mortgage_account_id = Column(String(255), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
+    scheduled_date = Column(Date, nullable=False)
+    status = Column(String(50), default="PENDING", nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user = relationship("User", back_populates="scheduled_payments")

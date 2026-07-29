@@ -17,6 +17,22 @@ class CoreBankingService(ABC):
     ) -> Optional[Dict[str, Any]]:
         pass
 
+    @abstractmethod
+    def validate_account(self, account_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_available_balance(self, account_id: str) -> Optional[float]:
+        pass
+
+    @abstractmethod
+    def debit_account(self, account_id: str, amount: float) -> bool:
+        pass
+
+    @abstractmethod
+    def credit_account(self, account_id: str, amount: float) -> bool:
+        pass
+
 
 class MortgageService(ABC):
     @abstractmethod
@@ -27,4 +43,12 @@ class MortgageService(ABC):
     def get_mortgage_details(
         self, customer_id: str, account_id: str
     ) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def process_payment(self, mortgage_account_id: str, amount: float) -> bool:
+        pass
+
+    @abstractmethod
+    def reverse_payment(self, mortgage_account_id: str, amount: float) -> bool:
         pass

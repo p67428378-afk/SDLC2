@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from typing import List
 
 from server.config import settings
 from server.database import get_db, init_db, seed_data
@@ -13,6 +14,13 @@ from server.schemas import (
     DashboardResponse,
     SummaryResponse,
     UserProfileResponse,
+    DepositAccount,
+    MortgagePaymentRequest,
+    MortgagePaymentResponse,
+    PaymentHistoryResponse,
+    ScheduledPaymentRequest,
+    ScheduledPaymentResponse,
+    CancelScheduledPaymentResponse,
 )
 from server.auth import (
     verify_password,
@@ -24,15 +32,14 @@ from server.auth import (
 from server.services.fiserv import FiservMockService
 from server.services.cenlar import CenlarMockService
 from server.services.aggregation import AggregationService
+from server.services.payment_orchestration import PaymentOrchestrationService
 
 # Initialize mock services
 fiserv_service = FiservMockService()
 cenlar_service = CenlarMockService()
 aggregation_service = AggregationService(fiserv_service, cenlar_service)
+payment_orchestrator = PaymentOrchestrationService(fiserv_service, cenlar_service)
 
-# Lifespan context manager or startup event
-# Since we want to support both, let's use startup event or lifespan.
-# Let's use the standard startup event or lifespan.
 from contextlib import asynccontextmanager
 
 
@@ -158,3 +165,111 @@ def get_profile(current_user: User = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
+
+# --- NEW PAYMENT ENDPOINTS ---
+
+@app.get("/api/v1/payments/sources/{mortgage_account_id}", response_model=List[DepositAccount])
+def get_payment_sources(
+    mortgage_account_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    return payment_orchestrator.get_eligible_sources(current_user, mortgage_account_id)
+
+
+@app.post("/api/v1/payments/mortgage", response_model=MortgagePaymentResponse)
+def execute_mortgage_payment(
+    payload: MortgagePaymentRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return payment_orchestrator.execute_payment(
+        db=db,
+        user=current_user,
+        idempotency_key=idempotency_key,
+        source_account_id=payload.source_account_id,
+        mortgage_account_id=payload.mortgage_account_id,
+        amount=payload.amount
+    )
+
+
+@app.get("/api/v1/payments", response_model=List[PaymentHistoryResponse])
+def get_payment_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    history = payment_orchestrator.get_payment_history(db, current_user)
+    return [
+        {
+            "id": p.id,
+            "user_id": p.user_id,
+            "source_account_id": p.source_account_id,
+            "mortgage_account_id": p.mortgage_account_id,
+            "amount": float(p.amount),
+            "status": p.status,
+            "confirmation_number": p.confirmation_number,
+            "created_at": p.created_at.isoformat()
+        }
+        for p in history
+    ]
+
+
+@app.post("/api/v1/payments/scheduled", response_model=ScheduledPaymentResponse)
+def schedule_payment(
+    payload: ScheduledPaymentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    sp = payment_orchestrator.schedule_payment(
+        db=db,
+        user=current_user,
+        source_account_id=payload.source_account_id,
+        mortgage_account_id=payload.mortgage_account_id,
+        amount=payload.amount,
+        scheduled_date=payload.scheduled_date
+    )
+    return {
+        "id": sp.id,
+        "user_id": sp.user_id,
+        "source_account_id": sp.source_account_id,
+        "mortgage_account_id": sp.mortgage_account_id,
+        "amount": float(sp.amount),
+        "scheduled_date": sp.scheduled_date.isoformat(),
+        "status": sp.status,
+        "created_at": sp.created_at.isoformat()
+    }
+
+
+@app.get("/api/v1/payments/scheduled", response_model=List[ScheduledPaymentResponse])
+def get_scheduled_payments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    sps = payment_orchestrator.get_scheduled_payments(db, current_user)
+    return [
+        {
+            "id": sp.id,
+            "user_id": sp.user_id,
+            "source_account_id": sp.source_account_id,
+            "mortgage_account_id": sp.mortgage_account_id,
+            "amount": float(sp.amount),
+            "scheduled_date": sp.scheduled_date.isoformat(),
+            "status": sp.status,
+            "created_at": sp.created_at.isoformat()
+        }
+        for sp in sps
+    ]
+
+
+@app.delete("/api/v1/payments/scheduled/{payment_id}", response_model=CancelScheduledPaymentResponse)
+def cancel_scheduled_payment(
+    payment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    success = payment_orchestrator.cancel_scheduled_payment(db, current_user, payment_id)
+    return {
+        "message": "Scheduled payment cancelled successfully",
+        "success": success
+    }

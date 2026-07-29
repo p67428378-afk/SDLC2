@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 from server.services.base import CoreBankingService
 
 
@@ -27,6 +28,26 @@ class FiservMockService(CoreBankingService):
                     "balance": 12450.00,
                     "interest_rate": 0.05,
                     "status": "Active",
+                    "transactions": [
+                        {
+                            "date": "2026-05-15",
+                            "description": "Payroll Direct Deposit",
+                            "amount": 3500.00,
+                            "type": "Credit",
+                        },
+                        {
+                            "date": "2026-05-14",
+                            "description": "Grocery Store",
+                            "amount": -124.50,
+                            "type": "Debit",
+                        },
+                        {
+                            "date": "2026-05-12",
+                            "description": "Electric Utility",
+                            "amount": -85.20,
+                            "type": "Debit",
+                        }
+                    ]
                 },
                 {
                     "id": "fiserv-sav-1",
@@ -36,6 +57,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 82780.00,
                     "interest_rate": 4.25,
                     "status": "Active",
+                    "transactions": []
                 },
                 {
                     "id": "fiserv-cd-1",
@@ -45,6 +67,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 50000.00,
                     "interest_rate": 5.10,
                     "status": "Active",
+                    "transactions": []
                 },
                 {
                     "id": "fiserv-loan-1",
@@ -54,6 +77,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 15200.00,
                     "interest_rate": 3.45,
                     "status": "Active",
+                    "transactions": []
                 },
             ]
         }
@@ -70,27 +94,59 @@ class FiservMockService(CoreBankingService):
         user_accounts = self.get_accounts(cif)
         for acc in user_accounts:
             if acc["id"] == account_id:
-                # Return detailed view (can include extra mock fields like transactions)
                 details = acc.copy()
-                details["transactions"] = [
-                    {
-                        "date": "2026-05-15",
-                        "description": "Payroll Direct Deposit",
-                        "amount": 3500.00,
-                        "type": "Credit",
-                    },
-                    {
-                        "date": "2026-05-14",
-                        "description": "Grocery Store",
-                        "amount": -124.50,
-                        "type": "Debit",
-                    },
-                    {
-                        "date": "2026-05-12",
-                        "description": "Electric Utility",
-                        "amount": -85.20,
-                        "type": "Debit",
-                    },
-                ]
+                if "transactions" not in details:
+                    details["transactions"] = []
                 return details
         return None
+
+    def _find_account(self, account_id: str) -> Optional[Dict[str, Any]]:
+        for cif, acc_list in self.accounts.items():
+            for acc in acc_list:
+                if acc["id"] == account_id:
+                    return acc
+        return None
+
+    def validate_account(self, account_id: str) -> bool:
+        acc = self._find_account(account_id)
+        if not acc:
+            return False
+        return acc["type"] in ("DDA", "Savings") and acc["status"] == "Active"
+
+    def get_available_balance(self, account_id: str) -> Optional[float]:
+        acc = self._find_account(account_id)
+        if not acc:
+            return None
+        return acc["balance"]
+
+    def debit_account(self, account_id: str, amount: float) -> bool:
+        acc = self._find_account(account_id)
+        if not acc:
+            return False
+        if acc["balance"] < amount:
+            return False
+        acc["balance"] = round(acc["balance"] - amount, 2)
+        if "transactions" not in acc:
+            acc["transactions"] = []
+        acc["transactions"].insert(0, {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "description": "Mortgage Payment Debit",
+            "amount": -amount,
+            "type": "Debit"
+        })
+        return True
+
+    def credit_account(self, account_id: str, amount: float) -> bool:
+        acc = self._find_account(account_id)
+        if not acc:
+            return False
+        acc["balance"] = round(acc["balance"] + amount, 2)
+        if "transactions" not in acc:
+            acc["transactions"] = []
+        acc["transactions"].insert(0, {
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "description": "Mortgage Payment Reversal",
+            "amount": amount,
+            "type": "Credit"
+        })
+        return True

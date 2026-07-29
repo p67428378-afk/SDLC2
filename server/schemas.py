@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr
-from typing import List
+from pydantic import BaseModel, EmailStr, Field
+from typing import List, Optional
+from datetime import datetime, date
 
 
 class UserLogin(BaseModel):
@@ -90,3 +91,55 @@ class SummaryResponse(BaseModel):
     total_loans: float
     total_mortgages: float
     net_worth: float
+
+
+# --- NEW SCHEMAS FOR PAYMENTS ---
+
+class MortgagePaymentRequest(BaseModel):
+    source_account_id: str
+    mortgage_account_id: str
+    amount: float = Field(..., gt=0)
+
+
+class MortgagePaymentResponse(BaseModel):
+    amount: float
+    confirmation_number: str
+    mortgage_account_id: str
+    payment_date: str
+    source_account_id: str
+    updated_mortgage_balance: float
+    updated_source_balance: float
+
+
+class PaymentHistoryResponse(BaseModel):
+    id: str
+    user_id: str
+    source_account_id: str
+    mortgage_account_id: str
+    amount: float
+    status: str
+    confirmation_number: str
+    created_at: str
+
+
+class ScheduledPaymentRequest(BaseModel):
+    source_account_id: str
+    mortgage_account_id: str
+    amount: float = Field(..., gt=0)
+    scheduled_date: date
+
+
+class ScheduledPaymentResponse(BaseModel):
+    id: str
+    user_id: str
+    source_account_id: str
+    mortgage_account_id: str
+    amount: float
+    scheduled_date: str
+    status: str
+    created_at: str
+
+
+class CancelScheduledPaymentResponse(BaseModel):
+    message: str
+    success: bool
