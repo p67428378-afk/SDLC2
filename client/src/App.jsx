@@ -14,6 +14,7 @@ import MakePaymentPage from "./pages/MakePaymentPage";
 import PaymentReviewPage from "./pages/PaymentReviewPage";
 import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
 import ScheduledPaymentsPage from "./pages/ScheduledPaymentsPage";
+import ProfileSettingsPage from "./pages/ProfileSettingsPage";
 import { authService } from "./services/api";
 
 function ProtectedRoute({ children }) {
@@ -90,6 +91,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ScheduledPaymentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfileSettingsPage />
             </ProtectedRoute>
           }
         />
