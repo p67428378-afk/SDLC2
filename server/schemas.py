@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List
+from typing import List, Optional, Dict
 from datetime import date
 
 
@@ -30,6 +30,13 @@ class CustomerProfile(BaseModel):
     email: str
 
 
+class ProfilePreferences(BaseModel):
+    email_notif: bool
+    marketing: bool
+    paperless: bool
+    sms_notif: bool
+
+
 class UserProfileResponse(BaseModel):
     cif: str
     first_name: str
@@ -38,6 +45,26 @@ class UserProfileResponse(BaseModel):
     phone: str
     address: str
     relationship_manager: str
+    preferences: ProfilePreferences
+
+
+class UserProfileUpdateRequest(BaseModel):
+    address: str
+    email: str
+    phone: str
+    preferences: ProfilePreferences
+
+
+class ProfileChangeLogResponse(BaseModel):
+    id: int
+    user_id: str
+    changed_fields_before: Dict
+    changed_fields_after: Dict
+    status: str
+    failure_reason: Optional[str] = None
+    compensation_applied: bool
+    compensation_details: Optional[Dict] = None
+    timestamp: str
 
 
 class DepositAccount(BaseModel):

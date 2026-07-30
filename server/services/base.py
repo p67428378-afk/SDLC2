@@ -8,6 +8,18 @@ class CoreBankingService(ABC):
         pass
 
     @abstractmethod
+    def update_customer_profile(
+        self, cif: str, profile_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def update_communication_preferences(
+        self, cif: str, preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
         pass
 
@@ -43,6 +55,18 @@ class MortgageService(ABC):
     def get_mortgage_details(
         self, customer_id: str, account_id: str
     ) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def update_borrower_profile(
+        self, customer_id: str, profile_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def update_correspondence_preferences(
+        self, customer_id: str, preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
         pass
 
     @abstractmethod

@@ -15,6 +15,12 @@ class FiservMockService(CoreBankingService):
                 "phone": "1-800-555-0199",
                 "address": "123 Financial Way, Suite 100, New York, NY 10001",
                 "relationship_manager": "Robert Vance",
+                "preferences": {
+                    "paperless": True,
+                    "email_notif": True,
+                    "sms_notif": False,
+                    "marketing": True,
+                },
             }
         }
 
@@ -84,6 +90,43 @@ class FiservMockService(CoreBankingService):
 
     def get_customer_profile(self, cif: str) -> Optional[Dict[str, Any]]:
         return self.profiles.get(cif)
+
+    def update_customer_profile(
+        self, cif: str, profile_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        profile = self.profiles.get(cif)
+        if not profile:
+            return {"success": False, "previous_state": {}}
+        previous_state = {
+            "address": profile.get("address"),
+            "phone": profile.get("phone"),
+            "email": profile.get("email"),
+        }
+        if "address" in profile_data:
+            profile["address"] = profile_data["address"]
+        if "phone" in profile_data:
+            profile["phone"] = profile_data["phone"]
+        if "email" in profile_data:
+            profile["email"] = profile_data["email"]
+        return {"success": True, "previous_state": previous_state}
+
+    def update_communication_preferences(
+        self, cif: str, preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        profile = self.profiles.get(cif)
+        if not profile:
+            return {"success": False, "previous_state": {}}
+        if "preferences" not in profile:
+            profile["preferences"] = {
+                "paperless": True,
+                "email_notif": True,
+                "sms_notif": False,
+                "marketing": True,
+            }
+        previous_state = profile["preferences"].copy()
+        for k, v in preferences.items():
+            profile["preferences"][k] = v
+        return {"success": True, "previous_state": previous_state}
 
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
         return self.accounts.get(cif, [])

@@ -6,6 +6,20 @@ from server.services.base import MortgageService
 class CenlarMockService(MortgageService):
     def __init__(self):
         # Seed data for mock mortgage servicing
+        self.scenario = None
+        self.borrower_profiles = {
+            "CEN-554321": {
+                "customer_id": "CEN-554321",
+                "address": "123 Financial Way, Suite 100, New York, NY 10001",
+                "phone": "1-800-555-0199",
+                "email": "test@example.com",
+                "preferences": {
+                    "paperless": True,
+                    "email_notif": True,
+                    "marketing": True,
+                },
+            }
+        }
         self.mortgages = {
             "CEN-554321": [
                 {
@@ -43,6 +57,68 @@ class CenlarMockService(MortgageService):
 
     def get_mortgages(self, customer_id: str) -> List[Dict[str, Any]]:
         return self.mortgages.get(customer_id, [])
+
+    def update_borrower_profile(
+        self, customer_id: str, profile_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if self.scenario == "error_cenlar":
+            raise Exception("Simulated Cenlar sync failure")
+        profile = self.borrower_profiles.get(customer_id)
+        if not profile:
+            self.borrower_profiles[customer_id] = {
+                "customer_id": customer_id,
+                "address": "",
+                "phone": "",
+                "email": "",
+                "preferences": {
+                    "paperless": True,
+                    "email_notif": True,
+                    "marketing": True,
+                },
+            }
+            profile = self.borrower_profiles[customer_id]
+        previous_state = {
+            "address": profile.get("address"),
+            "phone": profile.get("phone"),
+            "email": profile.get("email"),
+        }
+        if "address" in profile_data:
+            profile["address"] = profile_data["address"]
+        if "phone" in profile_data:
+            profile["phone"] = profile_data["phone"]
+        if "email" in profile_data:
+            profile["email"] = profile_data["email"]
+        return {"success": True, "previous_state": previous_state}
+
+    def update_correspondence_preferences(
+        self, customer_id: str, preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if self.scenario == "error_cenlar":
+            raise Exception("Simulated Cenlar sync failure")
+        profile = self.borrower_profiles.get(customer_id)
+        if not profile:
+            self.borrower_profiles[customer_id] = {
+                "customer_id": customer_id,
+                "address": "",
+                "phone": "",
+                "email": "",
+                "preferences": {
+                    "paperless": True,
+                    "email_notif": True,
+                    "marketing": True,
+                },
+            }
+            profile = self.borrower_profiles[customer_id]
+        if "preferences" not in profile:
+            profile["preferences"] = {
+                "paperless": True,
+                "email_notif": True,
+                "marketing": True,
+            }
+        previous_state = profile["preferences"].copy()
+        for k, v in preferences.items():
+            profile["preferences"][k] = v
+        return {"success": True, "previous_state": previous_state}
 
     def get_mortgage_details(
         self, customer_id: str, account_id: str

@@ -5,7 +5,7 @@ from typing import List
 
 from server.config import settings
 from server.database import get_db, init_db, seed_data
-from server.models import User
+from server.models import User, ProfileChangeLog
 from server.schemas import (
     UserLogin,
     LoginResponse,
@@ -14,6 +14,8 @@ from server.schemas import (
     DashboardResponse,
     SummaryResponse,
     UserProfileResponse,
+    UserProfileUpdateRequest,
+    ProfileChangeLogResponse,
     DepositAccount,
     MortgagePaymentRequest,
     MortgagePaymentResponse,
@@ -33,12 +35,14 @@ from server.services.fiserv import FiservMockService
 from server.services.cenlar import CenlarMockService
 from server.services.aggregation import AggregationService
 from server.services.payment_orchestration import PaymentOrchestrationService
+from server.services.profile_sync import ProfileSyncService
 
 # Initialize mock services
 fiserv_service = FiservMockService()
 cenlar_service = CenlarMockService()
 aggregation_service = AggregationService(fiserv_service, cenlar_service)
 payment_orchestrator = PaymentOrchestrationService(fiserv_service, cenlar_service)
+profile_sync_service = ProfileSyncService(fiserv_service, cenlar_service)
 
 from contextlib import asynccontextmanager
 
@@ -165,6 +169,56 @@ def get_profile(current_user: User = Depends(get_current_user)):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
+
+@app.put("/api/v1/profile", response_model=UserProfileResponse)
+def update_profile(
+    payload: UserProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return profile_sync_service.sync_profile(
+        db=db,
+        user=current_user,
+        address=payload.address,
+        phone=payload.phone,
+        email=payload.email,
+        preferences=payload.preferences.dict(),
+    )
+
+
+@app.get("/api/v1/profile/history", response_model=List[ProfileChangeLogResponse])
+def get_profile_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    history = (
+        db.query(ProfileChangeLog)
+        .filter(ProfileChangeLog.user_id == current_user.id)
+        .order_by(ProfileChangeLog.timestamp.desc())
+        .all()
+    )
+    return [
+        {
+            "id": h.id,
+            "user_id": h.user_id,
+            "changed_fields_before": h.changed_fields_before,
+            "changed_fields_after": h.changed_fields_after,
+            "status": h.status,
+            "failure_reason": h.failure_reason,
+            "compensation_applied": h.compensation_applied,
+            "compensation_details": h.compensation_details,
+            "timestamp": h.timestamp.isoformat(),
+        }
+        for h in history
+    ]
+
+
+@app.post("/api/v1/mock/config")
+def set_mock_config(payload: dict):
+    scenario = payload.get("scenario")
+    cenlar_service.scenario = scenario
+    return {"message": f"Mock scenario set to {scenario}"}
 
 
 # --- NEW PAYMENT ENDPOINTS ---
