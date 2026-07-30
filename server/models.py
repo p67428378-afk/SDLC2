@@ -22,8 +22,12 @@ class User(Base):
         nullable=False,
     )
 
-    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
-    scheduled_payments = relationship("ScheduledPayment", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship(
+        "Payment", back_populates="user", cascade="all, delete-orphan"
+    )
+    scheduled_payments = relationship(
+        "ScheduledPayment", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Payment(Base):

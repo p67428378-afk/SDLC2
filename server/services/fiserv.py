@@ -46,8 +46,8 @@ class FiservMockService(CoreBankingService):
                             "description": "Electric Utility",
                             "amount": -85.20,
                             "type": "Debit",
-                        }
-                    ]
+                        },
+                    ],
                 },
                 {
                     "id": "fiserv-sav-1",
@@ -57,7 +57,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 82780.00,
                     "interest_rate": 4.25,
                     "status": "Active",
-                    "transactions": []
+                    "transactions": [],
                 },
                 {
                     "id": "fiserv-cd-1",
@@ -67,7 +67,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 50000.00,
                     "interest_rate": 5.10,
                     "status": "Active",
-                    "transactions": []
+                    "transactions": [],
                 },
                 {
                     "id": "fiserv-loan-1",
@@ -77,7 +77,7 @@ class FiservMockService(CoreBankingService):
                     "balance": 15200.00,
                     "interest_rate": 3.45,
                     "status": "Active",
-                    "transactions": []
+                    "transactions": [],
                 },
             ]
         }
@@ -128,12 +128,15 @@ class FiservMockService(CoreBankingService):
         acc["balance"] = round(acc["balance"] - amount, 2)
         if "transactions" not in acc:
             acc["transactions"] = []
-        acc["transactions"].insert(0, {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "description": "Mortgage Payment Debit",
-            "amount": -amount,
-            "type": "Debit"
-        })
+        acc["transactions"].insert(
+            0,
+            {
+                "date": datetime.utcnow().strftime("%Y-%m-%d"),
+                "description": "Mortgage Payment Debit",
+                "amount": -amount,
+                "type": "Debit",
+            },
+        )
         return True
 
     def credit_account(self, account_id: str, amount: float) -> bool:
@@ -143,10 +146,13 @@ class FiservMockService(CoreBankingService):
         acc["balance"] = round(acc["balance"] + amount, 2)
         if "transactions" not in acc:
             acc["transactions"] = []
-        acc["transactions"].insert(0, {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "description": "Mortgage Payment Reversal",
-            "amount": amount,
-            "type": "Credit"
-        })
+        acc["transactions"].insert(
+            0,
+            {
+                "date": datetime.utcnow().strftime("%Y-%m-%d"),
+                "description": "Mortgage Payment Reversal",
+                "amount": amount,
+                "type": "Credit",
+            },
+        )
         return True

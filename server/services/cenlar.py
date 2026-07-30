@@ -35,8 +35,8 @@ class CenlarMockService(MortgageService):
                             "principal": 845.00,
                             "interest": 1055.00,
                             "escrow": 250.00,
-                        }
-                    ]
+                        },
+                    ],
                 }
             ]
         }
@@ -76,17 +76,20 @@ class CenlarMockService(MortgageService):
         principal_part = round(amount * 0.4, 2)
         interest_part = round(amount * 0.5, 2)
         escrow_part = round(amount - principal_part - interest_part, 2)
-        
+
         mort["principal_balance"] = round(mort["principal_balance"] - principal_part, 2)
         if "payment_history" not in mort:
             mort["payment_history"] = []
-        mort["payment_history"].insert(0, {
-            "date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "amount": amount,
-            "principal": principal_part,
-            "interest": interest_part,
-            "escrow": escrow_part,
-        })
+        mort["payment_history"].insert(
+            0,
+            {
+                "date": datetime.utcnow().strftime("%Y-%m-%d"),
+                "amount": amount,
+                "principal": principal_part,
+                "interest": interest_part,
+                "escrow": escrow_part,
+            },
+        )
         return True
 
     def reverse_payment(self, mortgage_account_id: str, amount: float) -> bool:

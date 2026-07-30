@@ -169,10 +169,13 @@ def get_profile(current_user: User = Depends(get_current_user)):
 
 # --- NEW PAYMENT ENDPOINTS ---
 
-@app.get("/api/v1/payments/sources/{mortgage_account_id}", response_model=List[DepositAccount])
+
+@app.get(
+    "/api/v1/payments/sources/{mortgage_account_id}",
+    response_model=List[DepositAccount],
+)
 def get_payment_sources(
-    mortgage_account_id: str,
-    current_user: User = Depends(get_current_user)
+    mortgage_account_id: str, current_user: User = Depends(get_current_user)
 ):
     return payment_orchestrator.get_eligible_sources(current_user, mortgage_account_id)
 
@@ -182,7 +185,7 @@ def execute_mortgage_payment(
     payload: MortgagePaymentRequest,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     return payment_orchestrator.execute_payment(
         db=db,
@@ -190,14 +193,13 @@ def execute_mortgage_payment(
         idempotency_key=idempotency_key,
         source_account_id=payload.source_account_id,
         mortgage_account_id=payload.mortgage_account_id,
-        amount=payload.amount
+        amount=payload.amount,
     )
 
 
 @app.get("/api/v1/payments", response_model=List[PaymentHistoryResponse])
 def get_payment_history(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     history = payment_orchestrator.get_payment_history(db, current_user)
     return [
@@ -209,7 +211,7 @@ def get_payment_history(
             "amount": float(p.amount),
             "status": p.status,
             "confirmation_number": p.confirmation_number,
-            "created_at": p.created_at.isoformat()
+            "created_at": p.created_at.isoformat(),
         }
         for p in history
     ]
@@ -219,7 +221,7 @@ def get_payment_history(
 def schedule_payment(
     payload: ScheduledPaymentRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     sp = payment_orchestrator.schedule_payment(
         db=db,
@@ -227,7 +229,7 @@ def schedule_payment(
         source_account_id=payload.source_account_id,
         mortgage_account_id=payload.mortgage_account_id,
         amount=payload.amount,
-        scheduled_date=payload.scheduled_date
+        scheduled_date=payload.scheduled_date,
     )
     return {
         "id": sp.id,
@@ -237,14 +239,13 @@ def schedule_payment(
         "amount": float(sp.amount),
         "scheduled_date": sp.scheduled_date.isoformat(),
         "status": sp.status,
-        "created_at": sp.created_at.isoformat()
+        "created_at": sp.created_at.isoformat(),
     }
 
 
 @app.get("/api/v1/payments/scheduled", response_model=List[ScheduledPaymentResponse])
 def get_scheduled_payments(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     sps = payment_orchestrator.get_scheduled_payments(db, current_user)
     return [
@@ -256,20 +257,22 @@ def get_scheduled_payments(
             "amount": float(sp.amount),
             "scheduled_date": sp.scheduled_date.isoformat(),
             "status": sp.status,
-            "created_at": sp.created_at.isoformat()
+            "created_at": sp.created_at.isoformat(),
         }
         for sp in sps
     ]
 
 
-@app.delete("/api/v1/payments/scheduled/{payment_id}", response_model=CancelScheduledPaymentResponse)
+@app.delete(
+    "/api/v1/payments/scheduled/{payment_id}",
+    response_model=CancelScheduledPaymentResponse,
+)
 def cancel_scheduled_payment(
     payment_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    success = payment_orchestrator.cancel_scheduled_payment(db, current_user, payment_id)
-    return {
-        "message": "Scheduled payment cancelled successfully",
-        "success": success
-    }
+    success = payment_orchestrator.cancel_scheduled_payment(
+        db, current_user, payment_id
+    )
+    return {"message": "Scheduled payment cancelled successfully", "success": success}

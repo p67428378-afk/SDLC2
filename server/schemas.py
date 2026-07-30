@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
-from datetime import datetime, date
+from typing import List
+from datetime import date
 
 
 class UserLogin(BaseModel):
@@ -94,6 +94,7 @@ class SummaryResponse(BaseModel):
 
 
 # --- NEW SCHEMAS FOR PAYMENTS ---
+
 
 class MortgagePaymentRequest(BaseModel):
     source_account_id: str
