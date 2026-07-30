@@ -40,10 +40,10 @@ export default function AccountDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary">Loading account details...</p>
+          <p className="mt-4 text-text-secondary">Loading account details...</p>
         </div>
       </div>
     );
@@ -51,18 +51,18 @@ export default function AccountDetailPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm text-center">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
+        <div className="max-w-md w-full bg-card-background p-8 border border-border rounded-xl shadow-sm text-center">
           <span className="material-symbols-outlined text-error text-5xl">
             error
           </span>
-          <h2 className="mt-4 text-xl font-bold text-on-surface">
+          <h2 className="mt-4 text-xl font-bold text-text-primary">
             Error Loading Details
           </h2>
-          <p className="mt-2 text-secondary">{error}</p>
+          <p className="mt-2 text-text-secondary">{error}</p>
           <button
             onClick={() => navigate("/details")}
-            className="mt-6 bg-primary text-on-primary font-label-md py-2 px-4 rounded-xl hover:bg-primary-container transition-colors"
+            className="mt-6 bg-primary text-white font-label-md py-2 px-4 rounded-xl hover:bg-red-700 transition-colors"
           >
             Back to Accounts
           </button>
@@ -77,8 +77,10 @@ export default function AccountDetailPage() {
     return (
       <AppLayout>
         <div>
-          <h1 className="font-headline-lg text-on-surface">Account Details</h1>
-          <p className="font-body-md text-secondary mt-1">
+          <h1 className="font-headline-lg text-text-primary">
+            Account Details
+          </h1>
+          <p className="font-body-md text-text-secondary mt-1">
             Select an account below to view its detailed information and
             transaction history.
           </p>
@@ -86,8 +88,8 @@ export default function AccountDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Deposits List */}
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
-            <h2 className="font-headline-sm text-on-surface mb-4 flex items-center gap-2">
+          <div className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
+            <h2 className="font-headline-sm text-text-primary mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 savings
               </span>
@@ -100,15 +102,15 @@ export default function AccountDetailPage() {
                   onClick={() =>
                     navigate(`/details?source=fiserv&id=${acc.id}`)
                   }
-                  className="p-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer"
+                  className="p-3 border border-border rounded-xl hover:bg-page-background transition-colors cursor-pointer"
                 >
-                  <p className="font-label-md text-primary hover:underline">
+                  <p className="font-label-md text-accent hover:underline">
                     {acc.name}
                   </p>
-                  <p className="text-xs text-secondary font-mono">
+                  <p className="text-xs text-text-secondary font-mono">
                     •••• {acc.account_number.slice(-4)}
                   </p>
-                  <p className="text-sm font-semibold text-on-surface mt-1">
+                  <p className="text-sm font-semibold text-text-primary mt-1">
                     $
                     {acc.balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -121,8 +123,8 @@ export default function AccountDetailPage() {
           </div>
 
           {/* Loans List */}
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
-            <h2 className="font-headline-sm text-on-surface mb-4 flex items-center gap-2">
+          <div className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
+            <h2 className="font-headline-sm text-text-primary mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 directions_car
               </span>
@@ -135,15 +137,15 @@ export default function AccountDetailPage() {
                   onClick={() =>
                     navigate(`/details?source=fiserv&id=${acc.id}`)
                   }
-                  className="p-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer"
+                  className="p-3 border border-border rounded-xl hover:bg-page-background transition-colors cursor-pointer"
                 >
-                  <p className="font-label-md text-primary hover:underline">
+                  <p className="font-label-md text-accent hover:underline">
                     {acc.name}
                   </p>
-                  <p className="text-xs text-secondary font-mono">
+                  <p className="text-xs text-text-secondary font-mono">
                     •••• {acc.account_number.slice(-4)}
                   </p>
-                  <p className="text-sm font-semibold text-on-surface mt-1">
+                  <p className="text-sm font-semibold text-text-primary mt-1">
                     $
                     {acc.balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -156,8 +158,8 @@ export default function AccountDetailPage() {
           </div>
 
           {/* Mortgages List */}
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
-            <h2 className="font-headline-sm text-on-surface mb-4 flex items-center gap-2">
+          <div className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
+            <h2 className="font-headline-sm text-text-primary mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 home
               </span>
@@ -170,15 +172,15 @@ export default function AccountDetailPage() {
                   onClick={() =>
                     navigate(`/details?source=cenlar&id=${acc.id}`)
                   }
-                  className="p-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer"
+                  className="p-3 border border-border rounded-xl hover:bg-page-background transition-colors cursor-pointer"
                 >
-                  <p className="font-label-md text-primary hover:underline">
+                  <p className="font-label-md text-accent hover:underline">
                     {acc.name}
                   </p>
-                  <p className="text-xs text-secondary font-mono">
+                  <p className="text-xs text-text-secondary font-mono">
                     •••• {acc.account_number.slice(-4)}
                   </p>
-                  <p className="text-sm font-semibold text-on-surface mt-1">
+                  <p className="text-sm font-semibold text-text-primary mt-1">
                     $
                     {acc.principal_balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -201,13 +203,13 @@ export default function AccountDetailPage() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center justify-center w-10 h-10 rounded-full border border-outline-variant hover:bg-surface-container transition-colors"
+          className="flex items-center justify-center w-10 h-10 rounded-full border border-border hover:bg-page-background transition-colors"
         >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-          <h1 className="font-headline-lg text-on-surface">{account.name}</h1>
-          <p className="font-body-md text-secondary mt-1">
+          <h1 className="font-headline-lg text-text-primary">{account.name}</h1>
+          <p className="font-body-md text-text-secondary mt-1">
             Account Number:{" "}
             <span className="font-mono">{account.account_number}</span>
           </p>
@@ -216,19 +218,19 @@ export default function AccountDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Account Details Card */}
-        <div className="lg:col-span-7 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
-          <h2 className="font-headline-sm text-on-surface mb-6 flex items-center gap-2">
+        <div className="lg:col-span-7 bg-card-background border border-border rounded-xl p-6 shadow-sm">
+          <h2 className="font-headline-sm text-text-primary mb-6 flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">info</span>
             Account Information
           </h2>
           <div className="space-y-4">
             {isMortgage ? (
               <>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Principal Balance
                   </span>
-                  <span className="text-on-surface font-bold">
+                  <span className="text-text-primary font-bold">
                     $
                     {account.principal_balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -236,11 +238,11 @@ export default function AccountDetailPage() {
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Original Loan Amount
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     $
                     {account.original_amount.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -248,33 +250,33 @@ export default function AccountDetailPage() {
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Interest Rate
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     {account.interest_rate}%
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">Term</span>
-                  <span className="text-on-surface font-semibold">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">Term</span>
+                  <span className="text-text-primary font-semibold">
                     {account.term_months} Months
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Maturity Date
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     {account.maturity_date}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Escrow Balance
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     $
                     {account.escrow_balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -282,11 +284,11 @@ export default function AccountDetailPage() {
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Next Payment Amount
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     $
                     {account.next_payment_amount.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -295,7 +297,7 @@ export default function AccountDetailPage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-secondary font-medium">
+                  <span className="text-text-secondary font-medium">
                     Next Payment Due
                   </span>
                   <span className="text-primary font-semibold">
@@ -305,11 +307,11 @@ export default function AccountDetailPage() {
               </>
             ) : (
               <>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Current Balance
                   </span>
-                  <span className="text-on-surface font-bold">
+                  <span className="text-text-primary font-bold">
                     $
                     {account.balance.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -317,25 +319,27 @@ export default function AccountDetailPage() {
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Account Type
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     {account.type}
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-outline-variant pb-2">
-                  <span className="text-secondary font-medium">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-text-secondary font-medium">
                     Interest Rate
                   </span>
-                  <span className="text-on-surface font-semibold">
+                  <span className="text-text-primary font-semibold">
                     {account.interest_rate}%
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-secondary font-medium">Status</span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <span className="text-text-secondary font-medium">
+                    Status
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                     {account.status}
                   </span>
                 </div>
@@ -345,15 +349,15 @@ export default function AccountDetailPage() {
         </div>
 
         {/* Additional Info / Actions Card */}
-        <div className="lg:col-span-5 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-card-background border border-border rounded-xl p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <h2 className="font-headline-sm text-on-surface mb-4 flex items-center gap-2">
+            <h2 className="font-headline-sm text-text-primary mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 shield
               </span>
               Security & Settings
             </h2>
-            <p className="text-sm text-secondary mb-6">
+            <p className="text-sm text-text-secondary mb-6">
               Manage your account preferences, statements, and security
               settings.
             </p>
@@ -361,33 +365,33 @@ export default function AccountDetailPage() {
               {isMortgage && (
                 <button
                   onClick={() => navigate(`/make-payment?id=${account.id}`)}
-                  className="w-full bg-primary text-on-primary font-label-md py-3 px-4 rounded-xl hover:bg-primary-container transition-colors flex justify-center items-center gap-2 mb-2"
+                  className="w-full bg-primary text-white font-label-md py-3 px-4 rounded-xl hover:bg-red-700 transition-colors flex justify-center items-center gap-2 mb-2"
                 >
                   <span className="material-symbols-outlined">payments</span>
                   Make Payment
                 </button>
               )}
-              <button className="w-full text-left px-4 py-3 border border-outline-variant rounded-xl hover:bg-surface-container transition-colors flex justify-between items-center">
-                <span className="font-label-md text-on-surface">
+              <button className="w-full text-left px-4 py-3 border border-border rounded-xl hover:bg-page-background transition-colors flex justify-between items-center">
+                <span className="font-label-md text-text-primary">
                   View Statements
                 </span>
-                <span className="material-symbols-outlined text-secondary">
+                <span className="material-symbols-outlined text-text-secondary">
                   chevron_right
                 </span>
               </button>
-              <button className="w-full text-left px-4 py-3 border border-outline-variant rounded-xl hover:bg-surface-container transition-colors flex justify-between items-center">
-                <span className="font-label-md text-on-surface">
+              <button className="w-full text-left px-4 py-3 border border-border rounded-xl hover:bg-page-background transition-colors flex justify-between items-center">
+                <span className="font-label-md text-text-primary">
                   Account Alerts
                 </span>
-                <span className="material-symbols-outlined text-secondary">
+                <span className="material-symbols-outlined text-text-secondary">
                   chevron_right
                 </span>
               </button>
             </div>
           </div>
 
-          <div className="mt-6 p-4 bg-surface-container rounded-xl border border-outline-variant text-xs text-secondary">
-            <p className="font-semibold text-on-surface mb-1">Need Help?</p>
+          <div className="mt-6 p-4 bg-page-background rounded-xl border border-border text-xs text-text-secondary">
+            <p className="font-semibold text-text-primary mb-1">Need Help?</p>
             <p>
               Contact our 24/7 support team for assistance with this account.
             </p>

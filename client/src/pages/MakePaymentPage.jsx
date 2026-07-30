@@ -84,10 +84,10 @@ export default function MakePaymentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary">Loading payment details...</p>
+          <p className="mt-4 text-text-secondary">Loading payment details...</p>
         </div>
       </div>
     );
@@ -95,16 +95,16 @@ export default function MakePaymentPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm text-center">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
+        <div className="max-w-md w-full bg-card-background p-8 border border-border rounded-xl shadow-sm text-center">
           <span className="material-symbols-outlined text-error text-5xl">
             error
           </span>
-          <h2 className="mt-4 text-xl font-bold text-on-surface">Error</h2>
-          <p className="mt-2 text-secondary">{error}</p>
+          <h2 className="mt-4 text-xl font-bold text-text-primary">Error</h2>
+          <p className="mt-2 text-text-secondary">{error}</p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="mt-6 bg-primary text-on-primary font-label-md py-2 px-4 rounded-xl hover:bg-primary-container transition-colors"
+            className="mt-6 bg-primary text-white font-label-md py-2 px-4 rounded-xl hover:bg-red-700 transition-colors"
           >
             Back to Dashboard
           </button>
@@ -117,10 +117,10 @@ export default function MakePaymentPage() {
     <AppLayout>
       {/* Page Header */}
       <header className="mb-8">
-        <h2 className="font-headline-md text-2xl font-bold text-on-surface">
+        <h2 className="font-headline-md text-2xl font-bold text-text-primary">
           Make Mortgage Payment
         </h2>
-        <p className="font-body-md text-secondary mt-1">
+        <p className="font-body-md text-text-secondary mt-1">
           Complete your monthly transaction securely.
         </p>
       </header>
@@ -129,12 +129,12 @@ export default function MakePaymentPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column (8-col) */}
         <div className="lg:col-span-8 space-y-6">
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+          <section className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
               <span className="material-symbols-outlined text-primary">
                 payment
               </span>
-              <h3 className="font-title-lg text-lg font-semibold">
+              <h3 className="font-title-lg text-lg font-semibold text-text-primary">
                 Payment Details
               </h3>
             </div>
@@ -142,14 +142,14 @@ export default function MakePaymentPage() {
             <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
               {/* Source Account */}
               <div className="space-y-2">
-                <label className="block font-label-md text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block font-label-md text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Select Payment Source Account
                 </label>
                 <div className="relative">
                   <select
                     value={selectedSourceId}
                     onChange={(e) => setSelectedSourceId(e.target.value)}
-                    className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 font-body-md text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none cursor-pointer"
+                    className="w-full h-12 bg-page-background border border-border rounded-lg px-4 font-body-md text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all appearance-none cursor-pointer"
                   >
                     {sources.map((src) => (
                       <option key={src.id} value={src.id}>
@@ -160,7 +160,7 @@ export default function MakePaymentPage() {
                       </option>
                     ))}
                   </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-secondary">
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
                     expand_more
                   </span>
                 </div>
@@ -168,11 +168,11 @@ export default function MakePaymentPage() {
 
               {/* Payment Amount */}
               <div className="space-y-2">
-                <label className="block font-label-md text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block font-label-md text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Payment Amount ($)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary font-mono-numeric">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary font-mono-numeric">
                     $
                   </span>
                   <input
@@ -180,12 +180,12 @@ export default function MakePaymentPage() {
                     step="0.01"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg pl-8 pr-4 font-mono-numeric text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                    className="w-full h-12 bg-page-background border border-border rounded-lg pl-8 pr-4 font-mono-numeric text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all"
                     placeholder="0.00"
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <p className="font-label-md text-xs text-secondary">
+                  <p className="font-label-md text-xs text-text-secondary">
                     Next payment due: $
                     {mortgage?.next_payment_amount.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -223,7 +223,7 @@ export default function MakePaymentPage() {
                   type="button"
                   onClick={handleReview}
                   disabled={!isAmountValid || !hasSufficientFunds}
-                  className="px-6 h-12 bg-primary text-on-primary font-title-lg rounded-lg hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all duration-100 shadow-md"
+                  className="px-6 h-12 bg-primary text-white font-title-lg rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all duration-100 shadow-md"
                 >
                   Review Payment
                 </button>
@@ -241,15 +241,15 @@ export default function MakePaymentPage() {
           </section>
 
           {/* Informational Alert */}
-          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex gap-3 items-start">
+          <div className="bg-page-background border border-border rounded-xl p-4 flex gap-3 items-start">
             <span className="material-symbols-outlined text-primary mt-0.5">
               info
             </span>
             <div>
-              <p className="font-body-md text-on-surface font-semibold">
+              <p className="font-body-md text-text-primary font-semibold">
                 Payment Processing Note
               </p>
-              <p className="font-body-md text-secondary text-sm mt-0.5">
+              <p className="font-body-md text-text-secondary text-sm mt-0.5">
                 Payments made before 5:00 PM EST will be processed same-day.
                 Late fees may apply if payment is received after the grace
                 period.
@@ -260,43 +260,43 @@ export default function MakePaymentPage() {
 
         {/* Right Column (4-col) */}
         <div className="lg:col-span-4 space-y-6">
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+          <section className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
               <span className="material-symbols-outlined text-primary">
                 summarize
               </span>
-              <h3 className="font-title-lg text-lg font-semibold">
+              <h3 className="font-title-lg text-lg font-semibold text-text-primary">
                 Mortgage Summary
               </h3>
             </div>
             <div className="space-y-4">
-              <div className="pb-4 border-b border-outline-variant">
-                <p className="font-label-md text-xs text-secondary uppercase">
+              <div className="pb-4 border-b border-border">
+                <p className="font-label-md text-xs text-text-secondary uppercase">
                   Account
                 </p>
-                <p className="font-body-lg font-semibold text-on-surface">
+                <p className="font-body-lg font-semibold text-text-primary">
                   {mortgage?.name}
                 </p>
-                <p className="font-body-md text-secondary text-sm">
+                <p className="font-body-md text-text-secondary text-sm">
                   {mortgage?.account_number}
                 </p>
               </div>
-              <div className="pb-4 border-b border-outline-variant">
-                <p className="font-label-md text-xs text-secondary uppercase">
+              <div className="pb-4 border-b border-border">
+                <p className="font-label-md text-xs text-text-secondary uppercase">
                   Principal Balance
                 </p>
-                <p className="font-mono-numeric text-lg font-bold text-on-surface">
+                <p className="font-mono-numeric text-lg font-bold text-text-primary">
                   $
                   {mortgage?.principal_balance.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
                   })}
                 </p>
               </div>
-              <div className="pb-4 border-b border-outline-variant">
-                <p className="font-label-md text-xs text-secondary uppercase">
+              <div className="pb-4 border-b border-border">
+                <p className="font-label-md text-xs text-text-secondary uppercase">
                   Next Payment Due
                 </p>
-                <p className="font-mono-numeric text-lg font-bold text-on-surface">
+                <p className="font-mono-numeric text-lg font-bold text-text-primary">
                   $
                   {mortgage?.next_payment_amount.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
@@ -304,10 +304,10 @@ export default function MakePaymentPage() {
                 </p>
               </div>
               <div>
-                <p className="font-label-md text-xs text-secondary uppercase">
+                <p className="font-label-md text-xs text-text-secondary uppercase">
                   Due Date
                 </p>
-                <p className="font-body-lg text-on-surface">
+                <p className="font-body-lg text-text-primary">
                   {mortgage?.next_payment_due}
                 </p>
               </div>
@@ -315,7 +315,7 @@ export default function MakePaymentPage() {
           </section>
 
           {/* Image Card */}
-          <div className="relative overflow-hidden rounded-xl h-64 border border-outline-variant shadow-sm group">
+          <div className="relative overflow-hidden rounded-xl h-64 border border-border shadow-sm group">
             <div
               className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
               style={{

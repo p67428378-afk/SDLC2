@@ -14,20 +14,20 @@ export default function PaymentReviewPage() {
 
   if (!location.state) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm text-center">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
+        <div className="max-w-md w-full bg-card-background p-8 border border-border rounded-xl shadow-sm text-center">
           <span className="material-symbols-outlined text-error text-5xl">
             error
           </span>
-          <h2 className="mt-4 text-xl font-bold text-on-surface">
+          <h2 className="mt-4 text-xl font-bold text-text-primary">
             Invalid State
           </h2>
-          <p className="mt-2 text-secondary">
+          <p className="mt-2 text-text-secondary">
             No payment details found to review.
           </p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="mt-6 bg-primary text-on-primary font-label-md py-2 px-4 rounded-xl hover:bg-primary-container transition-colors"
+            className="mt-6 bg-primary text-white font-label-md py-2 px-4 rounded-xl hover:bg-red-700 transition-colors"
           >
             Back to Dashboard
           </button>
@@ -75,20 +75,20 @@ export default function PaymentReviewPage() {
     <AppLayout>
       {/* Page Header */}
       <header className="mb-8">
-        <h2 className="font-headline-md text-2xl font-bold text-on-surface">
+        <h2 className="font-headline-md text-2xl font-bold text-text-primary">
           Review Mortgage Payment
         </h2>
-        <p className="font-body-md text-secondary mt-1">
+        <p className="font-body-md text-text-secondary mt-1">
           Please confirm the payment details before submitting.
         </p>
       </header>
 
-      <div className="max-w-2xl mx-auto bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm space-y-6">
-        <div className="flex items-center gap-2 pb-4 border-b border-outline-variant">
+      <div className="max-w-2xl mx-auto bg-card-background border border-border rounded-xl p-6 shadow-sm space-y-6">
+        <div className="flex items-center gap-2 pb-4 border-b border-border">
           <span className="material-symbols-outlined text-primary">
             rate_review
           </span>
-          <h3 className="font-title-lg text-lg font-semibold">
+          <h3 className="font-title-lg text-lg font-semibold text-text-primary">
             Payment Summary
           </h3>
         </div>
@@ -107,23 +107,23 @@ export default function PaymentReviewPage() {
 
         <div className="space-y-4">
           {/* Source Account */}
-          <div className="flex justify-between items-start py-2 border-b border-outline-variant">
+          <div className="flex justify-between items-start py-2 border-b border-border">
             <div>
-              <p className="text-xs text-secondary uppercase font-semibold">
+              <p className="text-xs text-text-secondary uppercase font-semibold">
                 From (Source Account)
               </p>
-              <p className="font-body-lg font-semibold text-on-surface mt-1">
+              <p className="font-body-lg font-semibold text-text-primary mt-1">
                 {sourceAccount?.name}
               </p>
-              <p className="text-sm text-secondary">
+              <p className="text-sm text-text-secondary">
                 {sourceAccount?.account_number}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-secondary uppercase font-semibold">
+              <p className="text-xs text-text-secondary uppercase font-semibold">
                 Current Balance
               </p>
-              <p className="font-mono-numeric font-semibold text-on-surface mt-1">
+              <p className="font-mono-numeric font-semibold text-text-primary mt-1">
                 $
                 {sourceAccount?.balance.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
@@ -133,23 +133,23 @@ export default function PaymentReviewPage() {
           </div>
 
           {/* Target Mortgage */}
-          <div className="flex justify-between items-start py-2 border-b border-outline-variant">
+          <div className="flex justify-between items-start py-2 border-b border-border">
             <div>
-              <p className="text-xs text-secondary uppercase font-semibold">
+              <p className="text-xs text-text-secondary uppercase font-semibold">
                 To (Mortgage Account)
               </p>
-              <p className="font-body-lg font-semibold text-on-surface mt-1">
+              <p className="font-body-lg font-semibold text-text-primary mt-1">
                 {mortgageAccount?.name}
               </p>
-              <p className="text-sm text-secondary">
+              <p className="text-sm text-text-secondary">
                 {mortgageAccount?.account_number}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-secondary uppercase font-semibold">
+              <p className="text-xs text-text-secondary uppercase font-semibold">
                 Principal Balance
               </p>
-              <p className="font-mono-numeric font-semibold text-on-surface mt-1">
+              <p className="font-mono-numeric font-semibold text-text-primary mt-1">
                 $
                 {mortgageAccount?.principal_balance.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
@@ -159,12 +159,12 @@ export default function PaymentReviewPage() {
           </div>
 
           {/* Payment Amount */}
-          <div className="flex justify-between items-center py-4 bg-surface-container-low px-4 rounded-xl">
+          <div className="flex justify-between items-center py-4 bg-page-background px-4 rounded-xl">
             <div>
-              <p className="text-xs text-secondary uppercase font-semibold">
+              <p className="text-xs text-text-secondary uppercase font-semibold">
                 Payment Amount
               </p>
-              <p className="text-xs text-secondary mt-0.5">
+              <p className="text-xs text-text-secondary mt-0.5">
                 Processed immediately
               </p>
             </div>
@@ -184,7 +184,7 @@ export default function PaymentReviewPage() {
             type="button"
             onClick={handleConfirm}
             disabled={submitting}
-            className="flex-1 h-12 bg-primary text-on-primary font-title-lg rounded-lg hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 transition-all duration-100 shadow-md"
+            className="flex-1 h-12 bg-primary text-white font-title-lg rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 transition-all duration-100 shadow-md"
           >
             {submitting ? (
               <>
@@ -202,7 +202,7 @@ export default function PaymentReviewPage() {
             type="button"
             onClick={() => navigate(`/make-payment?id=${mortgageId}`)}
             disabled={submitting}
-            className="px-6 h-12 bg-white border border-outline-variant text-secondary font-title-lg rounded-lg hover:bg-surface-container transition-all active:scale-95 duration-100"
+            className="px-6 h-12 bg-white border border-border text-text-secondary font-title-lg rounded-lg hover:bg-page-background transition-all active:scale-95 duration-100"
           >
             Back
           </button>

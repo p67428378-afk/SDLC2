@@ -129,10 +129,12 @@ export default function ScheduledPaymentsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary">Loading scheduled payments...</p>
+          <p className="mt-4 text-text-secondary">
+            Loading scheduled payments...
+          </p>
         </div>
       </div>
     );
@@ -142,10 +144,10 @@ export default function ScheduledPaymentsPage() {
     <AppLayout>
       {/* Page Header */}
       <header className="mb-8">
-        <h2 className="font-headline-md text-2xl font-bold text-on-surface">
+        <h2 className="font-headline-md text-2xl font-bold text-text-primary">
           Scheduled Payments
         </h2>
-        <p className="font-body-md text-secondary mt-1">
+        <p className="font-body-md text-text-secondary mt-1">
           Schedule future one-time payments and manage pending ones.
         </p>
       </header>
@@ -175,12 +177,12 @@ export default function ScheduledPaymentsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Schedule Form (5-col) */}
         <div className="lg:col-span-5">
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+          <section className="bg-card-background border border-border rounded-xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
               <span className="material-symbols-outlined text-primary">
                 calendar_month
               </span>
-              <h3 className="font-title-lg text-lg font-semibold">
+              <h3 className="font-title-lg text-lg font-semibold text-text-primary">
                 Schedule New Payment
               </h3>
             </div>
@@ -188,13 +190,13 @@ export default function ScheduledPaymentsPage() {
             <form className="space-y-4" onSubmit={handleSchedule}>
               {/* Select Mortgage */}
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Select Mortgage Account
                 </label>
                 <select
                   value={selectedMortgageId}
                   onChange={(e) => setSelectedMortgageId(e.target.value)}
-                  className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 font-body-md text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  className="w-full h-12 bg-page-background border border-border rounded-lg px-4 font-body-md text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all"
                 >
                   {mortgages.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -206,13 +208,13 @@ export default function ScheduledPaymentsPage() {
 
               {/* Select Source Account */}
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Select Source Account
                 </label>
                 <select
                   value={selectedSourceId}
                   onChange={(e) => setSelectedSourceId(e.target.value)}
-                  className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 font-body-md text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  className="w-full h-12 bg-page-background border border-border rounded-lg px-4 font-body-md text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all"
                 >
                   {bankingAccounts.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -227,7 +229,7 @@ export default function ScheduledPaymentsPage() {
 
               {/* Amount */}
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Payment Amount ($)
                 </label>
                 <input
@@ -235,7 +237,7 @@ export default function ScheduledPaymentsPage() {
                   step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 font-mono-numeric text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  className="w-full h-12 bg-page-background border border-border rounded-lg px-4 font-mono-numeric text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all"
                   placeholder="0.00"
                   required
                 />
@@ -243,14 +245,14 @@ export default function ScheduledPaymentsPage() {
 
               {/* Date */}
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-secondary uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Scheduled Date
                 </label>
                 <input
                   type="date"
                   value={scheduledDate}
                   onChange={(e) => setScheduledDate(e.target.value)}
-                  className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg px-4 font-body-md text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                  className="w-full h-12 bg-page-background border border-border rounded-lg px-4 font-body-md text-text-primary focus:ring-2 focus:ring-focus-ring focus:border-focus-ring transition-all"
                   required
                 />
               </div>
@@ -258,7 +260,7 @@ export default function ScheduledPaymentsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-12 bg-primary text-on-primary font-title-lg rounded-lg hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 transition-all duration-100 shadow-md"
+                className="w-full h-12 bg-primary text-white font-title-lg rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 transition-all duration-100 shadow-md"
               >
                 {submitting ? (
                   <>
@@ -278,25 +280,25 @@ export default function ScheduledPaymentsPage() {
 
         {/* Scheduled Payments List (7-col) */}
         <div className="lg:col-span-7">
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm h-full flex flex-col">
+          <section className="bg-card-background border border-border rounded-xl p-6 shadow-sm h-full flex flex-col">
             <div className="flex items-center gap-2 mb-6">
               <span className="material-symbols-outlined text-primary">
                 list_alt
               </span>
-              <h3 className="font-title-lg text-lg font-semibold">
+              <h3 className="font-title-lg text-lg font-semibold text-text-primary">
                 Pending Scheduled Payments
               </h3>
             </div>
 
             {scheduledPayments.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-outline-variant rounded-xl">
-                <span className="material-symbols-outlined text-secondary text-5xl">
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-border rounded-xl">
+                <span className="material-symbols-outlined text-text-secondary text-5xl">
                   event_busy
                 </span>
-                <p className="mt-4 text-on-surface font-semibold">
+                <p className="mt-4 text-text-primary font-semibold">
                   No Scheduled Payments
                 </p>
-                <p className="text-sm text-secondary mt-1">
+                <p className="text-sm text-text-secondary mt-1">
                   You don't have any pending scheduled payments at this time.
                 </p>
               </div>
@@ -313,40 +315,40 @@ export default function ScheduledPaymentsPage() {
                   return (
                     <div
                       key={payment.id}
-                      className="p-4 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors flex justify-between items-center"
+                      className="p-4 border border-border rounded-xl hover:bg-page-background transition-colors flex justify-between items-center"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-body-lg font-semibold text-on-surface">
+                          <span className="font-body-lg font-semibold text-text-primary">
                             $
                             {payment.amount.toLocaleString("en-US", {
                               minimumFractionDigits: 2,
                             })}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
                             {payment.status}
                           </span>
                         </div>
-                        <p className="text-xs text-secondary">
+                        <p className="text-xs text-text-secondary">
                           From:{" "}
-                          <span className="font-semibold text-on-surface">
+                          <span className="font-semibold text-text-primary">
                             {source?.name || "Deposit Account"}
                           </span>{" "}
                           ({payment.source_account_id})
                         </p>
-                        <p className="text-xs text-secondary">
+                        <p className="text-xs text-text-secondary">
                           To:{" "}
-                          <span className="font-semibold text-on-surface">
+                          <span className="font-semibold text-text-primary">
                             {mortgage?.name || "Mortgage Account"}
                           </span>{" "}
                           ({payment.mortgage_account_id})
                         </p>
-                        <p className="text-xs text-secondary flex items-center gap-1">
+                        <p className="text-xs text-text-secondary flex items-center gap-1">
                           <span className="material-symbols-outlined text-xs">
                             calendar_today
                           </span>
                           Scheduled for:{" "}
-                          <span className="font-semibold text-on-surface">
+                          <span className="font-semibold text-text-primary">
                             {payment.scheduled_date}
                           </span>
                         </p>

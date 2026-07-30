@@ -21,14 +21,14 @@ export default function Sidebar({ userProfile }) {
   const cif = userProfile ? userProfile.cif : "CIF-982341";
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[260px] bg-surface-container-lowest border-r border-outline-variant flex flex-col z-50">
+    <aside className="fixed left-0 top-0 h-screen w-[260px] bg-secondary text-white border-r border-border flex flex-col z-50">
       {/* Brand */}
       <div className="px-6 py-6 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-primary text-3xl">
             account_balance
           </span>
-          <span className="font-headline-sm text-on-surface tracking-tight">
+          <span className="font-headline-sm text-white tracking-tight">
             ApexUnion Bank
           </span>
         </div>
@@ -41,8 +41,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -60,8 +60,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -74,8 +74,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -88,8 +88,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -102,8 +102,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -116,8 +116,8 @@ export default function Sidebar({ userProfile }) {
           className={({ isActive }) =>
             `flex items-center gap-3 px-4 py-3 rounded-r-xl transition-colors duration-200 ${
               isActive
-                ? "bg-secondary-container text-on-secondary-container border-l-4 border-primary"
-                : "text-secondary hover:bg-surface-container"
+                ? "bg-primary text-white border-l-4 border-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -127,30 +127,30 @@ export default function Sidebar({ userProfile }) {
       </nav>
 
       {/* CTA & Footer */}
-      <div className="p-4 border-t border-outline-variant">
-        <button className="w-full bg-primary text-on-primary font-label-md py-2.5 px-4 rounded-xl mb-4 hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm">
+      <div className="p-4 border-t border-white/10">
+        <button className="w-full bg-primary text-white font-label-md py-2.5 px-4 rounded-xl mb-4 hover:bg-red-700 transition-colors shadow-sm">
           Open New Account
         </button>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-headline-sm">
+          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-headline-sm">
             {initials}
           </div>
           <div className="flex flex-col">
-            <span className="font-label-md text-on-surface">{fullName}</span>
-            <span className="font-label-sm text-secondary">{cif}</span>
+            <span className="font-label-md text-white">{fullName}</span>
+            <span className="font-label-sm text-gray-300">{cif}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1 mt-4">
           <a
             href="#support"
-            className="flex items-center gap-3 text-secondary px-2 py-2 hover:bg-surface-container rounded-xl transition-colors duration-200"
+            className="flex items-center gap-3 text-gray-300 px-2 py-2 hover:bg-white/10 rounded-xl transition-colors duration-200"
           >
             <span className="material-symbols-outlined text-sm">help</span>
             <span className="font-label-sm">Support</span>
           </a>
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 text-secondary px-2 py-2 hover:bg-surface-container rounded-xl transition-colors duration-200 text-left"
+            className="w-full flex items-center gap-3 text-gray-300 px-2 py-2 hover:bg-white/10 rounded-xl transition-colors duration-200 text-left"
           >
             <span className="material-symbols-outlined text-sm">logout</span>
             <span className="font-label-sm">Sign Out</span>

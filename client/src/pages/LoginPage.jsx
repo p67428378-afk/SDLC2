@@ -46,18 +46,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm">
+    <div className="min-h-screen flex items-center justify-center bg-page-background px-4 py-12 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-card-background p-8 border border-border rounded-xl shadow-sm">
         <div>
           <div className="flex justify-center">
             <span className="material-symbols-outlined text-primary text-5xl">
               account_balance
             </span>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-on-surface">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-text-primary">
             ApexUnion Bank
           </h2>
-          <p className="mt-2 text-center text-sm text-secondary">
+          <p className="mt-2 text-center text-sm text-text-secondary">
             {step === "login"
               ? "Sign in to your unified dashboard"
               : "Multi-Factor Authentication"}
@@ -66,7 +66,7 @@ export default function LoginPage() {
 
         {error && (
           <div
-            className="bg-error-container/10 border border-error text-error px-4 py-3 rounded-xl text-sm"
+            className="bg-error/10 border border-error text-error px-4 py-3 rounded-xl text-sm"
             role="alert"
           >
             {error}
@@ -79,7 +79,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="email-address"
-                  className="block text-sm font-medium text-secondary mb-1"
+                  className="block text-sm font-medium text-text-secondary mb-1"
                 >
                   Email address
                 </label>
@@ -91,14 +91,14 @@ export default function LoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-outline-variant placeholder-outline text-on-surface focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-border placeholder-text-secondary text-text-primary focus:outline-none focus:ring-focus-ring focus:border-focus-ring focus:z-10 sm:text-sm"
                   placeholder="test@example.com"
                 />
               </div>
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-secondary mb-1"
+                  className="block text-sm font-medium text-text-secondary mb-1"
                 >
                   Password
                 </label>
@@ -110,7 +110,7 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-outline-variant placeholder-outline text-on-surface focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-border placeholder-text-secondary text-text-primary focus:outline-none focus:ring-focus-ring focus:border-focus-ring focus:z-10 sm:text-sm"
                   placeholder="••••••••"
                 />
               </div>
@@ -120,25 +120,27 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-on-primary bg-primary hover:bg-primary-container hover:text-on-primary-container focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 transition-colors"
+                className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-primary hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring disabled:opacity-50 transition-colors"
               >
                 {loading ? "Signing in..." : "Sign in"}
               </button>
             </div>
 
-            <div className="mt-4 p-4 bg-surface-container rounded-xl border border-outline-variant text-xs text-secondary">
-              <p className="font-semibold text-on-surface mb-1">
+            <div className="mt-4 p-4 bg-page-background rounded-xl border border-border text-xs text-text-secondary">
+              <p className="font-semibold text-text-primary mb-1">
                 Test Credentials:
               </p>
               <p>
                 Email:{" "}
-                <span className="font-mono text-on-surface">
+                <span className="font-mono text-text-primary">
                   test@example.com
                 </span>
               </p>
               <p>
                 Password:{" "}
-                <span className="font-mono text-on-surface">testpassword</span>
+                <span className="font-mono text-text-primary">
+                  testpassword
+                </span>
               </p>
             </div>
           </form>
@@ -148,7 +150,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="mfa-code"
-                  className="block text-sm font-medium text-secondary mb-1"
+                  className="block text-sm font-medium text-text-secondary mb-1"
                 >
                   Enter 6-digit MFA Code
                 </label>
@@ -162,7 +164,7 @@ export default function LoginPage() {
                   required
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value)}
-                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-outline-variant placeholder-outline text-on-surface focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm text-center tracking-widest text-lg font-bold"
+                  className="appearance-none rounded-xl relative block w-full px-3 py-2 border border-border placeholder-text-secondary text-text-primary focus:outline-none focus:ring-focus-ring focus:border-focus-ring focus:z-10 sm:text-sm text-center tracking-widest text-lg font-bold"
                   placeholder="123456"
                 />
               </div>
@@ -172,19 +174,19 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-on-primary bg-primary hover:bg-primary-container hover:text-on-primary-container focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 transition-colors"
+                className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-primary hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring disabled:opacity-50 transition-colors"
               >
                 {loading ? "Verifying..." : "Verify MFA"}
               </button>
             </div>
 
-            <div className="mt-4 p-4 bg-surface-container rounded-xl border border-outline-variant text-xs text-secondary">
-              <p className="font-semibold text-on-surface mb-1">
+            <div className="mt-4 p-4 bg-page-background rounded-xl border border-border text-xs text-text-secondary">
+              <p className="font-semibold text-text-primary mb-1">
                 MFA Bypass Code:
               </p>
               <p>
                 Use static code:{" "}
-                <span className="font-mono text-on-surface font-bold">
+                <span className="font-mono text-text-primary font-bold">
                   123456
                 </span>
               </p>

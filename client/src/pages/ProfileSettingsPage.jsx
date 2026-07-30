@@ -61,7 +61,7 @@ export default function ProfileSettingsPage() {
             <span className="material-symbols-outlined animate-spin text-4xl text-primary">
               progress_activity
             </span>
-            <p className="text-on-surface-variant font-body-md">
+            <p className="text-text-secondary font-body-md">
               Loading profile settings...
             </p>
           </div>
@@ -73,7 +73,7 @@ export default function ProfileSettingsPage() {
   if (error) {
     return (
       <AppLayout userProfile={profile}>
-        <div className="bg-error-container border border-error/20 text-on-error-container p-6 rounded-xl flex flex-col gap-4 max-w-2xl mx-auto mt-8">
+        <div className="bg-error/10 border border-error/20 text-error p-6 rounded-xl flex flex-col gap-4 max-w-2xl mx-auto mt-8">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-error text-2xl">
               error
@@ -85,7 +85,7 @@ export default function ProfileSettingsPage() {
           <p className="font-body-md">{error}</p>
           <button
             onClick={fetchProfileData}
-            className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-surface-tint transition-colors self-start"
+            className="px-4 py-2 bg-primary text-white rounded-lg font-label-md text-label-md hover:bg-red-700 transition-colors self-start"
           >
             Retry
           </button>
@@ -99,22 +99,22 @@ export default function ProfileSettingsPage() {
       <div className="max-w-[1280px] mx-auto w-full">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="font-headline-lg text-headline-lg text-on-surface">
+          <h2 className="font-headline-lg text-headline-lg text-text-primary">
             Profile Settings
           </h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant mt-2">
+          <p className="font-body-lg text-body-lg text-text-secondary mt-2">
             Manage your personal information and communication preferences.
           </p>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-outline-variant mb-8 gap-8 overflow-x-auto">
+        <div className="flex border-b border-border mb-8 gap-8 overflow-x-auto">
           <button
             onClick={() => setActiveTab("overview")}
             className={`pb-4 font-label-md text-label-md whitespace-nowrap transition-colors ${
               activeTab === "overview"
                 ? "text-primary border-b-2 border-primary"
-                : "text-on-surface-variant hover:text-primary"
+                : "text-text-secondary hover:text-primary"
             }`}
           >
             Overview
@@ -124,7 +124,7 @@ export default function ProfileSettingsPage() {
             className={`pb-4 font-label-md text-label-md whitespace-nowrap transition-colors ${
               activeTab === "contact"
                 ? "text-primary border-b-2 border-primary"
-                : "text-on-surface-variant hover:text-primary"
+                : "text-text-secondary hover:text-primary"
             }`}
           >
             Contact Information
@@ -134,7 +134,7 @@ export default function ProfileSettingsPage() {
             className={`pb-4 font-label-md text-label-md whitespace-nowrap transition-colors ${
               activeTab === "preferences"
                 ? "text-primary border-b-2 border-primary"
-                : "text-on-surface-variant hover:text-primary"
+                : "text-text-secondary hover:text-primary"
             }`}
           >
             Communication Preferences
@@ -144,7 +144,7 @@ export default function ProfileSettingsPage() {
             className={`pb-4 font-label-md text-label-md whitespace-nowrap transition-colors ${
               activeTab === "security"
                 ? "text-primary border-b-2 border-primary"
-                : "text-on-surface-variant hover:text-primary"
+                : "text-text-secondary hover:text-primary"
             }`}
           >
             Security Settings
@@ -162,9 +162,9 @@ export default function ProfileSettingsPage() {
             {/* Right Column: Contact & Preferences Summary */}
             <div className="lg:col-span-8 space-y-6">
               {/* Contact Info Summary */}
-              <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="bg-card-background rounded-xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-headline-md text-headline-md flex items-center gap-2 text-on-surface">
+                  <h3 className="font-headline-md text-headline-md flex items-center gap-2 text-text-primary">
                     <span className="material-symbols-outlined text-primary">
                       contact_mail
                     </span>
@@ -172,7 +172,7 @@ export default function ProfileSettingsPage() {
                   </h3>
                   <button
                     onClick={() => setActiveTab("contact")}
-                    className="text-primary font-label-md hover:underline flex items-center gap-1"
+                    className="text-accent font-label-md hover:underline flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">
                       edit
@@ -182,26 +182,26 @@ export default function ProfileSettingsPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
-                    <span className="block font-label-sm text-label-sm text-on-surface-variant mb-1">
+                    <span className="block font-label-sm text-label-sm text-text-secondary mb-1">
                       Mailing Address
                     </span>
-                    <p className="font-body-md text-body-md text-on-surface bg-surface-container-low px-4 py-3 rounded-lg border border-transparent whitespace-pre-line">
+                    <p className="font-body-md text-body-md text-text-primary bg-page-background px-4 py-3 rounded-lg border border-transparent whitespace-pre-line">
                       {profile?.address || "No address provided"}
                     </p>
                   </div>
                   <div>
-                    <span className="block font-label-sm text-label-sm text-on-surface-variant mb-1">
+                    <span className="block font-label-sm text-label-sm text-text-secondary mb-1">
                       Phone Number
                     </span>
-                    <p className="font-body-md text-body-md text-on-surface bg-surface-container-low px-4 py-2 rounded-lg border border-transparent">
+                    <p className="font-body-md text-body-md text-text-primary bg-page-background px-4 py-2 rounded-lg border border-transparent">
                       {profile?.phone || "No phone number provided"}
                     </p>
                   </div>
                   <div>
-                    <span className="block font-label-sm text-label-sm text-on-surface-variant mb-1">
+                    <span className="block font-label-sm text-label-sm text-text-secondary mb-1">
                       Email Address
                     </span>
-                    <p className="font-body-md text-body-md text-on-surface bg-surface-container-low px-4 py-2 rounded-lg border border-transparent">
+                    <p className="font-body-md text-body-md text-text-primary bg-page-background px-4 py-2 rounded-lg border border-transparent">
                       {profile?.email || "No email address provided"}
                     </p>
                   </div>
@@ -209,9 +209,9 @@ export default function ProfileSettingsPage() {
               </div>
 
               {/* Preferences Summary */}
-              <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="bg-card-background rounded-xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-headline-md text-headline-md flex items-center gap-2 text-on-surface">
+                  <h3 className="font-headline-md text-headline-md flex items-center gap-2 text-text-primary">
                     <span className="material-symbols-outlined text-primary">
                       campaign
                     </span>
@@ -219,7 +219,7 @@ export default function ProfileSettingsPage() {
                   </h3>
                   <button
                     onClick={() => setActiveTab("preferences")}
-                    className="text-primary font-label-md hover:underline flex items-center gap-1"
+                    className="text-accent font-label-md hover:underline flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">
                       edit
@@ -228,51 +228,51 @@ export default function ProfileSettingsPage() {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-page-background rounded-lg">
                     <span
-                      className={`material-symbols-outlined ${profile?.preferences?.paperless ? "text-primary" : "text-outline"}`}
+                      className={`material-symbols-outlined ${profile?.preferences?.paperless ? "text-primary" : "text-text-secondary"}`}
                     >
                       {profile?.preferences?.paperless
                         ? "check_circle"
                         : "cancel"}
                     </span>
-                    <span className="font-body-md text-body-md text-on-surface">
+                    <span className="font-body-md text-body-md text-text-primary">
                       Paperless Statements
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-page-background rounded-lg">
                     <span
-                      className={`material-symbols-outlined ${profile?.preferences?.email_notif ? "text-primary" : "text-outline"}`}
+                      className={`material-symbols-outlined ${profile?.preferences?.email_notif ? "text-primary" : "text-text-secondary"}`}
                     >
                       {profile?.preferences?.email_notif
                         ? "check_circle"
                         : "cancel"}
                     </span>
-                    <span className="font-body-md text-body-md text-on-surface">
+                    <span className="font-body-md text-body-md text-text-primary">
                       Email Notifications
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-page-background rounded-lg">
                     <span
-                      className={`material-symbols-outlined ${profile?.preferences?.sms_notif ? "text-primary" : "text-outline"}`}
+                      className={`material-symbols-outlined ${profile?.preferences?.sms_notif ? "text-primary" : "text-text-secondary"}`}
                     >
                       {profile?.preferences?.sms_notif
                         ? "check_circle"
                         : "cancel"}
                     </span>
-                    <span className="font-body-md text-body-md text-on-surface">
+                    <span className="font-body-md text-body-md text-text-primary">
                       SMS Notifications
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-page-background rounded-lg">
                     <span
-                      className={`material-symbols-outlined ${profile?.preferences?.marketing ? "text-primary" : "text-outline"}`}
+                      className={`material-symbols-outlined ${profile?.preferences?.marketing ? "text-primary" : "text-text-secondary"}`}
                     >
                       {profile?.preferences?.marketing
                         ? "check_circle"
                         : "cancel"}
                     </span>
-                    <span className="font-body-md text-body-md text-on-surface">
+                    <span className="font-body-md text-body-md text-text-primary">
                       Marketing Communications
                     </span>
                   </div>
@@ -281,8 +281,8 @@ export default function ProfileSettingsPage() {
 
               {/* Profile Change History */}
               {history && history.length > 0 && (
-                <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 shadow-sm hover:shadow-md transition-shadow">
-                  <h3 className="font-headline-md text-headline-md mb-6 flex items-center gap-2 text-on-surface">
+                <div className="bg-card-background rounded-xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="font-headline-md text-headline-md mb-6 flex items-center gap-2 text-text-primary">
                     <span className="material-symbols-outlined text-primary">
                       history
                     </span>
@@ -291,17 +291,17 @@ export default function ProfileSettingsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-outline-variant text-label-sm text-on-surface-variant">
+                        <tr className="border-b border-border text-label-sm text-text-secondary">
                           <th className="pb-3 font-semibold">Date & Time</th>
                           <th className="pb-3 font-semibold">Status</th>
                           <th className="pb-3 font-semibold">Details</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-outline-variant font-body-sm text-body-sm text-on-surface">
+                      <tbody className="divide-y divide-border font-body-sm text-body-sm text-text-primary">
                         {history.slice(0, 5).map((log) => (
                           <tr
                             key={log.id}
-                            className="hover:bg-surface-container-low/50 transition-colors"
+                            className="hover:bg-page-background transition-colors"
                           >
                             <td className="py-3 whitespace-nowrap">
                               {new Date(log.timestamp).toLocaleString()}
@@ -311,7 +311,7 @@ export default function ProfileSettingsPage() {
                                 className={`px-2.5 py-1 rounded-full font-label-sm text-xs ${
                                   log.status === "SUCCESS"
                                     ? "bg-primary/10 text-primary"
-                                    : "bg-error-container text-on-error-container"
+                                    : "bg-error/10 text-error"
                                 }`}
                               >
                                 {log.status}
@@ -319,7 +319,7 @@ export default function ProfileSettingsPage() {
                             </td>
                             <td className="py-3">
                               {log.status === "SUCCESS" ? (
-                                <span className="text-on-surface-variant">
+                                <span className="text-text-secondary">
                                   Updated:{" "}
                                   {Object.keys(
                                     log.changed_fields_after || {},

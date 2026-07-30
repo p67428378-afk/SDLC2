@@ -30,10 +30,10 @@ export default function AccountSummaryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary">Loading account summary...</p>
+          <p className="mt-4 text-text-secondary">Loading account summary...</p>
         </div>
       </div>
     );
@@ -41,18 +41,18 @@ export default function AccountSummaryPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm text-center">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
+        <div className="max-w-md w-full bg-card-background p-8 border border-border rounded-xl shadow-sm text-center">
           <span className="material-symbols-outlined text-error text-5xl">
             error
           </span>
-          <h2 className="mt-4 text-xl font-bold text-on-surface">
+          <h2 className="mt-4 text-xl font-bold text-text-primary">
             Error Loading Summary
           </h2>
-          <p className="mt-2 text-secondary">{error}</p>
+          <p className="mt-2 text-text-secondary">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-6 bg-primary text-on-primary font-label-md py-2 px-4 rounded-xl hover:bg-primary-container transition-colors"
+            className="mt-6 bg-primary text-white font-label-md py-2 px-4 rounded-xl hover:bg-red-700 transition-colors"
           >
             Retry
           </button>
@@ -89,17 +89,17 @@ export default function AccountSummaryPage() {
       onSearchChange={setSearchQuery}
     >
       <div>
-        <h1 className="font-headline-lg text-on-surface">Account Summary</h1>
-        <p className="font-body-md text-secondary mt-1">
+        <h1 className="font-headline-lg text-text-primary">Account Summary</h1>
+        <p className="font-body-md text-text-secondary mt-1">
           Detailed view of all your banking and mortgage accounts grouped by
           type.
         </p>
       </div>
 
       {/* Deposits Section */}
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-outline-variant bg-surface">
-          <h2 className="font-headline-sm text-on-surface flex items-center gap-2">
+      <div className="bg-card-background border border-border rounded-xl flex flex-col shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-border bg-page-background">
+          <h2 className="font-headline-sm text-text-primary flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">
               savings
             </span>
@@ -109,47 +109,49 @@ export default function AccountSummaryPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface border-b border-outline-variant">
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+              <tr className="bg-page-background border-b border-border">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Name
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Type
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Number
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Interest Rate
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Status
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium text-right">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium text-right">
                   Balance
                 </th>
               </tr>
             </thead>
-            <tbody className="font-body-md text-on-surface">
+            <tbody className="font-body-md text-text-primary">
               {filteredDeposits.length > 0 ? (
                 filteredDeposits.map((account) => (
                   <tr
                     key={account.id}
                     onClick={() => handleAccountClick("fiserv", account.id)}
-                    className="border-b border-outline-variant hover:bg-surface-container-low transition-colors group cursor-pointer"
+                    className="border-b border-border hover:bg-page-background transition-colors group cursor-pointer"
                   >
-                    <td className="py-4 px-6 font-medium text-primary group-hover:underline">
+                    <td className="py-4 px-6 font-medium text-accent group-hover:underline">
                       {account.name}
                     </td>
-                    <td className="py-4 px-6 text-secondary">{account.type}</td>
-                    <td className="py-4 px-6 font-mono text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
+                      {account.type}
+                    </td>
+                    <td className="py-4 px-6 font-mono text-text-secondary">
                       •••• {account.account_number.slice(-4)}
                     </td>
-                    <td className="py-4 px-6 text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
                       {account.interest_rate}%
                     </td>
                     <td className="py-4 px-6">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                         {account.status}
                       </span>
                     </td>
@@ -164,7 +166,10 @@ export default function AccountSummaryPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-secondary">
+                  <td
+                    colSpan="6"
+                    className="py-8 text-center text-text-secondary"
+                  >
                     No deposit accounts found.
                   </td>
                 </tr>
@@ -175,9 +180,9 @@ export default function AccountSummaryPage() {
       </div>
 
       {/* Loans Section */}
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-outline-variant bg-surface">
-          <h2 className="font-headline-sm text-on-surface flex items-center gap-2">
+      <div className="bg-card-background border border-border rounded-xl flex flex-col shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-border bg-page-background">
+          <h2 className="font-headline-sm text-text-primary flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">
               directions_car
             </span>
@@ -187,47 +192,49 @@ export default function AccountSummaryPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface border-b border-outline-variant">
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+              <tr className="bg-page-background border-b border-border">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Name
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Type
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Number
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Interest Rate
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Status
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium text-right">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium text-right">
                   Balance
                 </th>
               </tr>
             </thead>
-            <tbody className="font-body-md text-on-surface">
+            <tbody className="font-body-md text-text-primary">
               {filteredLoans.length > 0 ? (
                 filteredLoans.map((account) => (
                   <tr
                     key={account.id}
                     onClick={() => handleAccountClick("fiserv", account.id)}
-                    className="border-b border-outline-variant hover:bg-surface-container-low transition-colors group cursor-pointer"
+                    className="border-b border-border hover:bg-page-background transition-colors group cursor-pointer"
                   >
-                    <td className="py-4 px-6 font-medium text-primary group-hover:underline">
+                    <td className="py-4 px-6 font-medium text-accent group-hover:underline">
                       {account.name}
                     </td>
-                    <td className="py-4 px-6 text-secondary">{account.type}</td>
-                    <td className="py-4 px-6 font-mono text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
+                      {account.type}
+                    </td>
+                    <td className="py-4 px-6 font-mono text-text-secondary">
                       •••• {account.account_number.slice(-4)}
                     </td>
-                    <td className="py-4 px-6 text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
                       {account.interest_rate}%
                     </td>
                     <td className="py-4 px-6">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                         {account.status}
                       </span>
                     </td>
@@ -242,7 +249,10 @@ export default function AccountSummaryPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-secondary">
+                  <td
+                    colSpan="6"
+                    className="py-8 text-center text-text-secondary"
+                  >
                     No loan accounts found.
                   </td>
                 </tr>
@@ -253,9 +263,9 @@ export default function AccountSummaryPage() {
       </div>
 
       {/* Mortgages Section */}
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-outline-variant bg-surface">
-          <h2 className="font-headline-sm text-on-surface flex items-center gap-2">
+      <div className="bg-card-background border border-border rounded-xl flex flex-col shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-border bg-page-background">
+          <h2 className="font-headline-sm text-text-primary flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">home</span>
             Mortgage Accounts
           </h2>
@@ -263,48 +273,48 @@ export default function AccountSummaryPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface border-b border-outline-variant">
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+              <tr className="bg-page-background border-b border-border">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Name
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Account Number
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Interest Rate
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Maturity Date
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium">
                   Next Payment
                 </th>
-                <th className="py-3 px-6 font-label-sm text-secondary font-medium text-right">
+                <th className="py-3 px-6 font-label-sm text-text-secondary font-medium text-right">
                   Principal Balance
                 </th>
               </tr>
             </thead>
-            <tbody className="font-body-md text-on-surface">
+            <tbody className="font-body-md text-text-primary">
               {filteredMortgages.length > 0 ? (
                 filteredMortgages.map((account) => (
                   <tr
                     key={account.id}
                     onClick={() => handleAccountClick("cenlar", account.id)}
-                    className="border-b border-outline-variant hover:bg-surface-container-low transition-colors group cursor-pointer"
+                    className="border-b border-border hover:bg-page-background transition-colors group cursor-pointer"
                   >
-                    <td className="py-4 px-6 font-medium text-primary group-hover:underline">
+                    <td className="py-4 px-6 font-medium text-accent group-hover:underline">
                       {account.name}
                     </td>
-                    <td className="py-4 px-6 font-mono text-secondary">
+                    <td className="py-4 px-6 font-mono text-text-secondary">
                       •••• {account.account_number.slice(-4)}
                     </td>
-                    <td className="py-4 px-6 text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
                       {account.interest_rate}%
                     </td>
-                    <td className="py-4 px-6 text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
                       {account.maturity_date}
                     </td>
-                    <td className="py-4 px-6 text-secondary">
+                    <td className="py-4 px-6 text-text-secondary">
                       $
                       {account.next_payment_amount.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
@@ -323,7 +333,10 @@ export default function AccountSummaryPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-secondary">
+                  <td
+                    colSpan="6"
+                    className="py-8 text-center text-text-secondary"
+                  >
                     No mortgage accounts found.
                   </td>
                 </tr>

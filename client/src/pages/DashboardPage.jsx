@@ -38,10 +38,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-secondary">Loading your dashboard...</p>
+          <p className="mt-4 text-text-secondary">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -49,18 +49,18 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full bg-surface-container-lowest p-8 border border-outline-variant rounded-xl shadow-sm text-center">
+      <div className="min-h-screen flex items-center justify-center bg-page-background">
+        <div className="max-w-md w-full bg-card-background p-8 border border-border rounded-xl shadow-sm text-center">
           <span className="material-symbols-outlined text-error text-5xl">
             error
           </span>
-          <h2 className="mt-4 text-xl font-bold text-on-surface">
+          <h2 className="mt-4 text-xl font-bold text-text-primary">
             Error Loading Dashboard
           </h2>
-          <p className="mt-2 text-secondary">{error}</p>
+          <p className="mt-2 text-text-secondary">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-6 bg-primary text-on-primary font-label-md py-2 px-4 rounded-xl hover:bg-primary-container transition-colors"
+            className="mt-6 bg-primary text-white font-label-md py-2 px-4 rounded-xl hover:bg-red-700 transition-colors"
           >
             Retry
           </button>
@@ -118,11 +118,13 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="font-headline-lg text-on-surface">
+          <h1 className="font-headline-lg text-text-primary">
             Good morning, {customer_profile.first_name}{" "}
             {customer_profile.last_name}
           </h1>
-          <p className="font-body-md text-secondary mt-1">{currentDateStr}</p>
+          <p className="font-body-md text-text-secondary mt-1">
+            {currentDateStr}
+          </p>
         </div>
       </div>
 
@@ -172,9 +174,11 @@ export default function DashboardPage() {
       {/* Row 3: Loans & Allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Loan Accounts (6 col) */}
-        <div className="lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+        <div className="lg:col-span-6 bg-card-background border border-border rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="font-headline-sm text-on-surface">Loan Accounts</h2>
+            <h2 className="font-headline-sm text-text-primary">
+              Loan Accounts
+            </h2>
           </div>
           <div className="flex flex-col gap-4">
             {filteredLoans && filteredLoans.length > 0 ? (
@@ -182,39 +186,39 @@ export default function DashboardPage() {
                 <div
                   key={loan.id}
                   onClick={() => handleAccountClick("fiserv", loan.id)}
-                  className="border border-outline-variant rounded-xl p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group"
+                  className="border border-border rounded-xl p-4 flex items-center justify-between hover:bg-page-background transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
+                    <div className="w-12 h-12 bg-secondary text-white rounded-full flex items-center justify-center">
                       <span className="material-symbols-outlined">
                         directions_car
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-label-md text-on-surface group-hover:underline">
+                      <h3 className="font-label-md text-text-primary group-hover:underline">
                         {loan.name}
                       </h3>
-                      <p className="font-body-sm text-secondary font-mono">
+                      <p className="font-body-sm text-text-secondary font-mono">
                         •••• {loan.account_number.slice(-4)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-label-md text-on-surface">
+                    <p className="font-label-md text-text-primary">
                       $
                       {loan.balance.toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
                     </p>
-                    <p className="font-body-sm text-secondary">
+                    <p className="font-body-sm text-text-secondary">
                       Rate: {loan.interest_rate}%
                     </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-center text-secondary py-4">
+              <p className="text-center text-text-secondary py-4">
                 No loan accounts found.
               </p>
             )}
@@ -222,42 +226,46 @@ export default function DashboardPage() {
         </div>
 
         {/* Asset Allocation (6 col) */}
-        <div className="lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col">
-          <h2 className="font-headline-sm text-on-surface mb-6">
+        <div className="lg:col-span-6 bg-card-background border border-border rounded-xl p-6 shadow-sm flex flex-col">
+          <h2 className="font-headline-sm text-text-primary mb-6">
             Asset Allocation
           </h2>
           <div className="flex-1 flex items-center justify-center gap-8">
             {/* CSS Donut Chart representation */}
             <div
-              className="relative w-32 h-32 rounded-full border-8 border-surface flex items-center justify-center"
+              className="relative w-32 h-32 rounded-full border-8 border-page-background flex items-center justify-center"
               style={{
-                background: `conic-gradient(#006194 0% ${savingsPct}%, #00855b ${savingsPct}% ${savingsPct + cdPct}%, #ba1a1a ${savingsPct + cdPct}% 100%)`,
+                background: `conic-gradient(#CC0000 0% ${savingsPct}%, #2563EB ${savingsPct}% ${savingsPct + cdPct}%, #DC2626 ${savingsPct + cdPct}% 100%)`,
                 borderRadius: "50%",
               }}
             >
-              <div className="w-24 h-24 bg-surface-container-lowest rounded-full absolute"></div>
+              <div className="w-24 h-24 bg-card-background rounded-full absolute"></div>
             </div>
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-primary"></div>
-                <span className="font-body-sm text-secondary w-20">
+                <span className="font-body-sm text-text-secondary w-20">
                   Savings
                 </span>
-                <span className="font-label-md text-on-surface">
+                <span className="font-label-md text-text-primary">
                   {savingsPct}%
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm bg-tertiary-container"></div>
-                <span className="font-body-sm text-secondary w-20">CD</span>
-                <span className="font-label-md text-on-surface">{cdPct}%</span>
+                <div className="w-3 h-3 rounded-sm bg-accent"></div>
+                <span className="font-body-sm text-text-secondary w-20">
+                  CD
+                </span>
+                <span className="font-label-md text-text-primary">
+                  {cdPct}%
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-error"></div>
-                <span className="font-body-sm text-secondary w-20">
+                <span className="font-body-sm text-text-secondary w-20">
                   Checking
                 </span>
-                <span className="font-label-md text-on-surface">
+                <span className="font-label-md text-text-primary">
                   {checkingPct}%
                 </span>
               </div>
