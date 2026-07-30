@@ -54,6 +54,14 @@ def client(db_session):
 
     seed_data(db_session)
 
+    # Reset mock services to prevent state pollution
+    from server.main import fiserv_service, cenlar_service
+
+    if hasattr(fiserv_service, "reset"):
+        fiserv_service.reset()
+    if hasattr(cenlar_service, "reset"):
+        cenlar_service.reset()
+
     with TestClient(app) as c:
         yield c
 

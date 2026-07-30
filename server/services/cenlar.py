@@ -179,3 +179,6 @@ class CenlarMockService(MortgageService):
         if mort["payment_history"] and mort["payment_history"][0]["amount"] == amount:
             mort["payment_history"].pop(0)
         return True
+
+    def reset(self):
+        self.__init__()

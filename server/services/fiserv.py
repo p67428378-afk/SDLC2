@@ -199,3 +199,6 @@ class FiservMockService(CoreBankingService):
             },
         )
         return True
+
+    def reset(self):
+        self.__init__()
