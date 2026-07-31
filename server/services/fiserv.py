@@ -1,4 +1,5 @@
 import base64
+import json
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -264,8 +265,10 @@ class FiservLiveService(FiservMockService):
         token = self._get_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "OrganizationId": self.org_id,
-            "TrnId": str(uuid.uuid4()),
+            "accept": "application/json",
+            "EFXHeader": json.dumps(
+                {"OrganizationId": self.org_id, "TrnId": str(uuid.uuid4())}
+            ),
             "Content-Type": "application/json",
         }
 
@@ -297,15 +300,7 @@ class FiservLiveService(FiservMockService):
 
                 url = f"{self.base_url}/acctservice/acctmgmt/accounts/secured"
                 body = {
-                    "AcctSel": {
-                        "AcctKeys": [
-                            {
-                                "AcctId": acct_id,
-                                "AcctType": api_type,
-                            }
-                        ]
-                    },
-                    "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+                    "AcctSel": {"AcctKeys": {"AcctId": acct_id, "AcctType": api_type}}
                 }
 
                 res_json = self._make_api_call(url, body)
