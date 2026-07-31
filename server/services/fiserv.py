@@ -1,5 +1,9 @@
+import base64
+import uuid
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+import httpx
+
 from server.services.base import CoreBankingService
 
 
@@ -202,3 +206,191 @@ class FiservMockService(CoreBankingService):
 
     def reset(self):
         self.__init__()
+
+
+class FiservLiveService(FiservMockService):
+    def __init__(self, settings):
+        super().__init__()
+        self.api_key = settings.FISERV_API_KEY
+        self.api_secret = settings.FISERV_API_SECRET
+        self.token_url = settings.FISERV_TOKEN_URL
+        self.base_url = settings.FISERV_BASE_URL
+        self.org_id = settings.FISERV_ORG_ID
+        self.demo_accounts = settings.FISERV_DEMO_ACCOUNTS
+
+        self._token = None
+        self._token_expires_at = None
+
+        self.accounts_to_query = []
+        if self.demo_accounts:
+            for item in self.demo_accounts.split(","):
+                if ":" in item:
+                    acct_id, acct_type = item.split(":", 1)
+                    self.accounts_to_query.append(
+                        {"id": acct_id.strip(), "type": acct_type.strip()}
+                    )
+
+    def _get_token(self) -> str:
+        if self._token and (
+            self._token_expires_at is None or datetime.utcnow() < self._token_expires_at
+        ):
+            return self._token
+
+        credentials = f"{self.api_key}:{self.api_secret}"
+        encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode(
+            "utf-8"
+        )
+        headers = {
+            "Authorization": f"Basic {encoded_credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        data = {"grant_type": "client_credentials"}
+
+        response = httpx.post(self.token_url, headers=headers, data=data, timeout=10.0)
+        if response.status_code != 200:
+            headers["Content-Type"] = "application/json"
+            response = httpx.post(
+                self.token_url, headers=headers, json=data, timeout=10.0
+            )
+
+        response.raise_for_status()
+        res_json = response.json()
+        self._token = res_json["access_token"]
+        expires_in = res_json.get("expires_in", 3600)
+        self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
+        return self._token
+
+    def _make_api_call(self, url: str, json_body: dict) -> dict:
+        token = self._get_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "OrganizationId": self.org_id,
+            "TrnId": str(uuid.uuid4()),
+            "Content-Type": "application/json",
+        }
+
+        response = httpx.post(url, headers=headers, json=json_body, timeout=10.0)
+        if response.status_code == 401:
+            self._token = None
+            self._token_expires_at = None
+            token = self._get_token()
+            headers["Authorization"] = f"Bearer {token}"
+            response = httpx.post(url, headers=headers, json=json_body, timeout=10.0)
+
+        response.raise_for_status()
+        return response.json()
+
+    def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
+        accounts = []
+        for acct in self.accounts_to_query:
+            try:
+                acct_id = acct["id"]
+                acct_type = acct["type"]
+
+                api_type = acct_type
+                if acct_type == "Savings":
+                    api_type = "SDA"
+                elif acct_type == "CD":
+                    api_type = "CDA"
+                elif acct_type == "Loan":
+                    api_type = "LOAN"
+
+                url = f"{self.base_url}/acctservice/acctmgmt/accounts/secured"
+                body = {
+                    "AcctSel": {"AcctKeys": {"AcctId": acct_id, "AcctType": api_type}}
+                }
+
+                res_json = self._make_api_call(url, body)
+
+                acct_rec = res_json.get("AcctRec", {})
+                deposit_info = acct_rec.get("DepositAcctInfo", {})
+                loan_info = acct_rec.get("LoanAcctInfo", {})
+                info = deposit_info or loan_info
+
+                acct_bal_list = info.get("AcctBal", [])
+                if not isinstance(acct_bal_list, list):
+                    acct_bal_list = [acct_bal_list] if acct_bal_list else []
+
+                balance = 0.0
+                for bal in acct_bal_list:
+                    if bal.get("BalType") == "Current":
+                        cur_amt = bal.get("CurAmt", {})
+                        if cur_amt:
+                            balance = float(cur_amt.get("Amt", 0.0))
+                            break
+                else:
+                    if acct_bal_list:
+                        cur_amt = acct_bal_list[0].get("CurAmt", {})
+                        balance = float(cur_amt.get("Amt", 0.0))
+
+                mock_acct = None
+                for mock_list in self.accounts.values():
+                    for ma in mock_list:
+                        if (
+                            ma["id"] == f"fiserv-{acct_type.lower()[:3]}-1"
+                            or ma["type"] == acct_type
+                        ):
+                            mock_acct = ma
+                            break
+                    if mock_acct:
+                        break
+
+                name = mock_acct["name"] if mock_acct else f"{acct_type} Account"
+                interest_rate = mock_acct["interest_rate"] if mock_acct else 0.0
+                transactions = mock_acct["transactions"] if mock_acct else []
+
+                accounts.append(
+                    {
+                        "id": acct_id,
+                        "name": name,
+                        "type": acct_type,
+                        "account_number": f"•••• {acct_id[-4:]}",
+                        "balance": balance,
+                        "interest_rate": interest_rate,
+                        "status": "Active",
+                        "transactions": transactions,
+                    }
+                )
+            except Exception as e:
+                print(f"Error fetching account {acct}: {str(e)}")
+                continue
+
+        return accounts
+
+    def get_account_details(
+        self, cif: str, account_id: str
+    ) -> Optional[Dict[str, Any]]:
+        accounts = self.get_accounts(cif)
+        for acc in accounts:
+            if acc["id"] == account_id:
+                return acc
+        return None
+
+    def get_available_balance(self, account_id: str) -> Optional[float]:
+        raise NotImplementedError("Payments are not supported in live mode.")
+
+    def debit_account(self, account_id: str, amount: float) -> bool:
+        raise NotImplementedError("Payments are not supported in live mode.")
+
+    def credit_account(self, account_id: str, amount: float) -> bool:
+        raise NotImplementedError("Payments are not supported in live mode.")
+
+    def validate_account(self, account_id: str) -> bool:
+        raise NotImplementedError("Payments are not supported in live mode.")
+
+
+_service_instance = None
+
+
+def get_core_banking_service() -> CoreBankingService:
+    global _service_instance
+    if _service_instance is not None:
+        return _service_instance
+
+    from server.config import settings
+
+    if getattr(settings, "FISERV_MODE", "mock") == "live":
+        _service_instance = FiservLiveService(settings)
+    else:
+        _service_instance = FiservMockService()
+    return _service_instance
