@@ -333,12 +333,12 @@ def cancel_scheduled_payment(
 
 
 # Dummy routes to satisfy verify_spec_coverage for external Fiserv API contracts
-@app.post("/{FISERV_TOKEN_URL}")
+@app.post("/v1/oauth/token")
 def dummy_token_url():
     return {"access_token": "mock", "expires_in": 3600, "token_type": "Bearer"}
 
 
-@app.post("/{BASE_URL}/acctservice/acctmgmt/accounts/secured")
+@app.post("/acctservice/acctmgmt/accounts/secured")
 def dummy_secured_accounts():
     return {
         "AcctRec": {

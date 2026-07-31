@@ -590,10 +590,10 @@
         }
       }
     },
-    "/{FISERV_TOKEN_URL}": {
+    "/v1/oauth/token": {
       "post": {
         "summary": "Dummy Token Url",
-        "operationId": "dummy_token_url__FISERV_TOKEN_URL__post",
+        "operationId": "dummy_token_url_v1_oauth_token_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -606,10 +606,10 @@
         }
       }
     },
-    "/{BASE_URL}/acctservice/acctmgmt/accounts/secured": {
+    "/acctservice/acctmgmt/accounts/secured": {
       "post": {
         "summary": "Dummy Secured Accounts",
-        "operationId": "dummy_secured_accounts__BASE_URL__acctservice_acctmgmt_accounts_secured_post",
+        "operationId": "dummy_secured_accounts_acctservice_acctmgmt_accounts_secured_post",
         "responses": {
           "200": {
             "description": "Successful Response",

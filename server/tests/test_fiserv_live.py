@@ -99,6 +99,52 @@ def test_get_accounts_success(mock_post, live_settings):
     assert accounts[0]["account_number"] == "•••• 1733"
     assert accounts[0]["status"] == "Active"
 
+    # Verify request body payload structure sent to Fiserv
+    account_calls = mock_post.call_args_list[1:]
+    assert len(account_calls) == 3
+
+    # Check first account (DDA -> DDA)
+    body0 = account_calls[0].kwargs.get("json", {})
+    assert body0 == {
+        "AcctSel": {
+            "AcctKeys": [
+                {
+                    "AcctId": "5041733",
+                    "AcctType": "DDA",
+                }
+            ]
+        },
+        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+    }
+
+    # Check second account (Savings -> SDA)
+    body1 = account_calls[1].kwargs.get("json", {})
+    assert body1 == {
+        "AcctSel": {
+            "AcctKeys": [
+                {
+                    "AcctId": "302034131",
+                    "AcctType": "SDA",
+                }
+            ]
+        },
+        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+    }
+
+    # Check third account (CD -> CDA)
+    body2 = account_calls[2].kwargs.get("json", {})
+    assert body2 == {
+        "AcctSel": {
+            "AcctKeys": [
+                {
+                    "AcctId": "290001702",
+                    "AcctType": "CDA",
+                }
+            ]
+        },
+        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+    }
+
 
 @patch("httpx.post")
 def test_get_accounts_graceful_degradation(mock_post, live_settings):
