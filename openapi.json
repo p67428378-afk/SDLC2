@@ -219,6 +219,27 @@
         ]
       }
     },
+    "/api/v1/accounts": {
+      "get": {
+        "summary": "Get All Accounts",
+        "operationId": "get_all_accounts_api_v1_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/accounts/banking": {
       "get": {
         "summary": "Get Banking Accounts",
@@ -702,12 +723,33 @@
       "post": {
         "summary": "Dummy Secured Accounts",
         "operationId": "dummy_secured_accounts_acctservice_acctmgmt_accounts_secured_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }

@@ -337,6 +337,21 @@ def get_summary(current_user: User = Depends(get_current_user)):
     )
 
 
+@app.get("/api/v1/accounts")
+def get_all_accounts(current_user: User = Depends(get_current_user)):
+    banking = (
+        fiserv_service.get_accounts(str(current_user.fiserv_cif))
+        if current_user.fiserv_cif
+        else []
+    )
+    mortgage = (
+        cenlar_service.get_mortgages(str(current_user.cenlar_customer_id))
+        if current_user.cenlar_customer_id
+        else []
+    )
+    return banking + mortgage
+
+
 @app.get("/api/v1/accounts/banking")
 def get_banking_accounts(current_user: User = Depends(get_current_user)):
     if not current_user.fiserv_cif:
@@ -553,7 +568,7 @@ def dummy_token_url():
 
 
 @app.post("/acctservice/acctmgmt/accounts/secured")
-def dummy_secured_accounts():
+def dummy_secured_accounts(payload: dict = None):
     return {
         "AcctRec": {
             "DepositAcctInfo": {

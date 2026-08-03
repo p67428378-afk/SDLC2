@@ -1,3 +1,4 @@
+import json
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
@@ -15,9 +16,9 @@ def live_settings():
         FISERV_MODE="live",
         FISERV_API_KEY="test-key",
         FISERV_API_SECRET="test-secret",
-        FISERV_TOKEN_URL="https://api.fiserv.com/v1/oauth/token",
-        FISERV_BASE_URL="https://api.fiserv.com/v1",
-        FISERV_ORG_ID="test-org",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
         FISERV_DEMO_ACCOUNTS="5041733:DDA,302034131:Savings,290001702:CD",
     )
 
@@ -26,9 +27,11 @@ def test_live_service_init(live_settings):
     service = FiservLiveService(live_settings)
     assert service.api_key == "test-key"
     assert service.api_secret == "test-secret"
-    assert service.token_url == "https://api.fiserv.com/v1/oauth/token"
-    assert service.base_url == "https://api.fiserv.com/v1"
-    assert service.org_id == "test-org"
+    assert (
+        service.token_url == "https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2"
+    )
+    assert service.base_url == "https://bankinghub-cert.fiservapis.com/banking/efx/v1"
+    assert service.org_id == "999990301"
     assert len(service.accounts_to_query) == 3
     assert service.accounts_to_query[0] == {"id": "5041733", "type": "DDA"}
     assert service.accounts_to_query[1] == {"id": "302034131", "type": "Savings"}
@@ -39,7 +42,6 @@ def test_live_service_init(live_settings):
 def test_get_token_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
-    # Mock token response
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -54,7 +56,7 @@ def test_get_token_success(mock_post, live_settings):
     assert service._token == "mock-access-token"
     assert service._token_expires_at is not None
 
-    # Second call should use cached token without calling POST again
+    # Second call should use cached token without extra POST
     mock_post.reset_mock()
     token2 = service._get_token()
     assert token2 == "mock-access-token"
@@ -65,7 +67,6 @@ def test_get_token_success(mock_post, live_settings):
 def test_get_accounts_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
-    # Mock token response and account details response
     mock_token_resp = MagicMock()
     mock_token_resp.status_code = 200
     mock_token_resp.json.return_value = {
@@ -76,14 +77,19 @@ def test_get_accounts_success(mock_post, live_settings):
     mock_acct_resp = MagicMock()
     mock_acct_resp.status_code = 200
     mock_acct_resp.json.return_value = {
+        "Status": {
+            "StatusCode": "0",
+            "StatusDesc": "Success",
+            "Severity": "Info",
+            "SvcProviderName": "Premier",
+        },
         "AcctRec": {
             "DepositAcctInfo": {
                 "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 15000.50}}]
             }
-        }
+        },
     }
 
-    # Side effect to return token first, then account details
     mock_post.side_effect = [
         mock_token_resp,
         mock_acct_resp,
@@ -99,58 +105,76 @@ def test_get_accounts_success(mock_post, live_settings):
     assert accounts[0]["account_number"] == "•••• 1733"
     assert accounts[0]["status"] == "Active"
 
-    # Verify request body payload structure sent to Fiserv
+    # Verify call parameters sent to Fiserv
     account_calls = mock_post.call_args_list[1:]
     assert len(account_calls) == 3
 
-    # Check first account (DDA -> DDA)
+    # Check headers (EFXHeader formatted as JSON string)
+    headers0 = account_calls[0].kwargs.get("headers", {})
+    assert "EFXHeader" in headers0
+    efx_header = json.loads(headers0["EFXHeader"])
+    assert efx_header["OrganizationId"] == "999990301"
+    assert "TrnId" in efx_header
+    assert headers0["Authorization"] == "Bearer mock-access-token"
+
+    # Check payload structure for account 0 (DDA -> DDA): AcctKeys is OBJECT, no IncCtrlList
     body0 = account_calls[0].kwargs.get("json", {})
     assert body0 == {
         "AcctSel": {
-            "AcctKeys": [
-                {
-                    "AcctId": "5041733",
-                    "AcctType": "DDA",
-                }
-            ]
-        },
-        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+            "AcctKeys": {
+                "AcctId": "5041733",
+                "AcctType": "DDA",
+            }
+        }
     }
+    assert "IncCtrlList" not in body0
 
-    # Check second account (Savings -> SDA)
+    # Check payload structure for account 1 (Savings -> SDA)
     body1 = account_calls[1].kwargs.get("json", {})
     assert body1 == {
         "AcctSel": {
-            "AcctKeys": [
-                {
-                    "AcctId": "302034131",
-                    "AcctType": "SDA",
-                }
-            ]
-        },
-        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+            "AcctKeys": {
+                "AcctId": "302034131",
+                "AcctType": "SDA",
+            }
+        }
     }
 
-    # Check third account (CD -> CDA)
+    # Check payload structure for account 2 (CD -> CDA)
     body2 = account_calls[2].kwargs.get("json", {})
     assert body2 == {
         "AcctSel": {
-            "AcctKeys": [
-                {
-                    "AcctId": "290001702",
-                    "AcctType": "CDA",
-                }
-            ]
-        },
-        "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+            "AcctKeys": {
+                "AcctId": "290001702",
+                "AcctType": "CDA",
+            }
+        }
     }
 
 
 @patch("httpx.post")
-def test_get_accounts_graceful_degradation(mock_post, live_settings):
+def test_get_accounts_loan_type_exclusion(mock_post, live_settings):
+    # Test that Loan / DDL account type is excluded in live mode
+    settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="test-key",
+        FISERV_API_SECRET="test-secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_DEMO_ACCOUNTS="6080:Loan",
+    )
+    service = FiservLiveService(settings)
+
+    accounts = service.get_accounts("CIF-982341")
+    # Loan account should be excluded
+    assert len(accounts) == 0
+
+
+@patch("httpx.post")
+def test_get_accounts_business_error_handling(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
-    # Mock token response
     mock_token_resp = MagicMock()
     mock_token_resp.status_code = 200
     mock_token_resp.json.return_value = {
@@ -158,15 +182,65 @@ def test_get_accounts_graceful_degradation(mock_post, live_settings):
         "expires_in": 3600,
     }
 
-    # First account succeeds, second fails, third succeeds
+    # First account returns StatusCode 1120 (Account Not On File) with HTTP 200
+    mock_business_err = MagicMock()
+    mock_business_err.status_code = 200
+    mock_business_err.json.return_value = {
+        "Status": {
+            "StatusCode": "1120",
+            "StatusDesc": "No Records Match Selection Criteria",
+            "Severity": "Info",
+            "SvcProviderName": "Premier",
+            "ServerStatusCode": "9999",
+            "ServerStatusDesc": "Account Number Not On File",
+        }
+    }
+
+    # Second account succeeds
     mock_acct_success = MagicMock()
     mock_acct_success.status_code = 200
     mock_acct_success.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 500.0}}]
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_business_err,
+        mock_acct_success,
+        mock_acct_success,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    # Account with business error should be skipped gracefully
+    assert len(accounts) == 2
+    assert accounts[0]["id"] == "302034131"
+
+
+@patch("httpx.post")
+def test_get_accounts_graceful_degradation(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_success = MagicMock()
+    mock_acct_success.status_code = 200
+    mock_acct_success.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
         "AcctRec": {
             "DepositAcctInfo": {
                 "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}]
             }
-        }
+        },
     }
 
     mock_acct_fail = MagicMock()
@@ -183,7 +257,6 @@ def test_get_accounts_graceful_degradation(mock_post, live_settings):
     ]
 
     accounts = service.get_accounts("CIF-982341")
-    # Should skip the failed one and return 2 accounts
     assert len(accounts) == 2
     assert accounts[0]["id"] == "5041733"
     assert accounts[1]["id"] == "290001702"
@@ -194,7 +267,6 @@ def test_token_refresh_on_401(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "expired-token"
 
-    # First call returns 401, second call (token fetch) returns 200, third call (retry) returns 200
     mock_401 = MagicMock()
     mock_401.status_code = 401
     mock_401.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -208,11 +280,12 @@ def test_token_refresh_on_401(mock_post, live_settings):
     mock_success = MagicMock()
     mock_success.status_code = 200
     mock_success.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
         "AcctRec": {
             "DepositAcctInfo": {
                 "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 500.0}}]
             }
-        }
+        },
     }
 
     mock_post.side_effect = [mock_401, mock_token, mock_success]
@@ -236,9 +309,7 @@ def test_not_implemented_methods(live_settings):
 
 
 def test_factory_pattern():
-    # Test default mock mode
     with patch("server.config.settings.FISERV_MODE", "mock"):
-        # Reset global instance
         import server.services.fiserv
 
         server.services.fiserv._service_instance = None
@@ -246,7 +317,6 @@ def test_factory_pattern():
         assert isinstance(service, FiservMockService)
         assert not isinstance(service, FiservLiveService)
 
-    # Test live mode
     with (
         patch("server.config.settings.FISERV_MODE", "live"),
         patch("server.config.settings.FISERV_API_KEY", "key"),

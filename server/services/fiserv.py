@@ -291,27 +291,41 @@ class FiservLiveService(FiservMockService):
                 acct_type = acct["type"]
 
                 api_type = acct_type
-                if acct_type == "Savings":
+                if acct_type in ("Savings", "SDA"):
                     api_type = "SDA"
-                elif acct_type == "CD":
+                elif acct_type in ("CD", "CDA"):
                     api_type = "CDA"
-                elif acct_type == "Loan":
-                    api_type = "LOAN"
+                elif acct_type in ("Loan", "DDL"):
+                    api_type = "DDL"
+                elif acct_type == "DDA":
+                    api_type = "DDA"
+
+                # Exclude Loan accounts (DDL) in live mode
+                if api_type == "DDL" or acct_type in ("Loan", "DDL"):
+                    print(f"Excluding Loan account {acct_id} (DDL) in live mode.")
+                    continue
 
                 url = f"{self.base_url}/acctservice/acctmgmt/accounts/secured"
                 body = {
                     "AcctSel": {
-                        "AcctKeys": [
-                            {
-                                "AcctId": acct_id,
-                                "AcctType": api_type,
-                            }
-                        ]
-                    },
-                    "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
+                        "AcctKeys": {
+                            "AcctId": acct_id,
+                            "AcctType": api_type,
+                        }
+                    }
                 }
 
                 res_json = self._make_api_call(url, body)
+
+                # Inspect Status.StatusCode for business errors (HTTP 200 with non-zero StatusCode)
+                status_info = res_json.get("Status", {})
+                status_code = str(status_info.get("StatusCode", "0"))
+                if status_code != "0":
+                    status_desc = status_info.get("StatusDesc", "Business Error")
+                    print(
+                        f"Fiserv business error for account {acct_id}: StatusCode {status_code} - {status_desc}"
+                    )
+                    continue
 
                 acct_rec = res_json.get("AcctRec", {})
                 deposit_info = acct_rec.get("DepositAcctInfo", {})
@@ -339,7 +353,13 @@ class FiservLiveService(FiservMockService):
                     for ma in mock_list:
                         if (
                             ma["id"] == f"fiserv-{acct_type.lower()[:3]}-1"
-                            or ma["type"] == acct_type
+                            or ma["type"].lower() == acct_type.lower()
+                            or (
+                                acct_type in ("SDA", "Savings")
+                                and ma["type"] == "Savings"
+                            )
+                            or (acct_type in ("CDA", "CD") and ma["type"] == "CD")
+                            or (acct_type in ("DDL", "Loan") and ma["type"] == "Loan")
                         ):
                             mock_acct = ma
                             break
