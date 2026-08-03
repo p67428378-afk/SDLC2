@@ -1,7 +1,10 @@
+from contextlib import asynccontextmanager
+from typing import List, Optional
+
 from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from typing import List
 
 from server.config import settings
 from server.database import get_db, init_db, seed_data
@@ -9,6 +12,7 @@ from server.models import User, ProfileChangeLog
 from server.schemas import (
     UserLogin,
     LoginResponse,
+    MFACodeResponse,
     MFAVerify,
     TokenResponse,
     DashboardResponse,
@@ -30,6 +34,7 @@ from server.auth import (
     create_access_token,
     verify_mfa_token,
     get_current_user,
+    mfa_store_manager,
 )
 from server.services.fiserv import get_core_banking_service
 from server.services.cenlar import CenlarMockService
@@ -43,8 +48,6 @@ cenlar_service = CenlarMockService()
 aggregation_service = AggregationService(fiserv_service, cenlar_service)
 payment_orchestrator = PaymentOrchestrationService(fiserv_service, cenlar_service)
 profile_sync_service = ProfileSyncService(fiserv_service, cenlar_service)
-
-from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
@@ -74,19 +77,223 @@ app.add_middleware(
 )
 
 
+def render_mfa_code_html(code: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MFA Verification Code</title>
+  <style>
+    body {{
+      background-color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }}
+    .card {{
+      background: #FFFFFF;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }}
+    .code-display {{
+      font-family: "Courier New", Courier, monospace;
+      font-size: 52px;
+      font-weight: bold;
+      color: #111827;
+      letter-spacing: 6px;
+      margin: 20px 0;
+      user-select: all;
+    }}
+    .btn-copy {{
+      background-color: #CC0000;
+      color: #FFFFFF;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }}
+    .btn-copy:hover {{
+      background-color: #A30000;
+    }}
+    .helper-text {{
+      color: #6B7280;
+      font-size: 14px;
+      margin-top: 16px;
+    }}
+    .toast {{
+      visibility: hidden;
+      min-width: 120px;
+      background-color: #111827;
+      color: #fff;
+      text-align: center;
+      border-radius: 4px;
+      padding: 8px 16px;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+    }}
+    .toast.show {{
+      visibility: visible;
+      animation: fadein 0.3s, fadeout 0.5s 1.5s;
+    }}
+    @keyframes fadein {{ from {{ bottom: 0; opacity: 0; }} to {{ bottom: 20px; opacity: 1; }} }}
+    @keyframes fadeout {{ from {{ bottom: 20px; opacity: 1; }} to {{ bottom: 0; opacity: 0; }} }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin: 0; color: #111827; font-size: 20px;">Your MFA Code</h2>
+    <div id="mfaCode" class="code-display">{code}</div>
+    <button class="btn-copy" onclick="copyCode()">Copy to Clipboard</button>
+    <p class="helper-text">Valid for 5 minutes. Max 3 verification attempts.</p>
+  </div>
+  <div id="toast" class="toast">Copied!</div>
+
+  <script>
+    function copyCode() {{
+      const codeText = document.getElementById('mfaCode').innerText;
+      navigator.clipboard.writeText(codeText).then(() => {{
+        const toast = document.getElementById('toast');
+        toast.className = 'toast show';
+        setTimeout(() => {{ toast.className = toast.className.replace('show', ''); }}, 2000);
+      }}).catch(() => {{
+        const input = document.createElement('textarea');
+        input.value = codeText;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        const toast = document.getElementById('toast');
+        toast.className = 'toast show';
+        setTimeout(() => {{ toast.className = toast.className.replace('show', ''); }}, 2000);
+      }});
+    }}
+  </script>
+</body>
+</html>"""
+
+
+def render_mfa_error_html(message: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MFA Verification Error</title>
+  <style>
+    body {{
+      background-color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }}
+    .card {{
+      background: #FFFFFF;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      border-top: 4px solid #CC0000;
+    }}
+    .error-title {{
+      margin: 0 0 12px 0;
+      color: #990000;
+      font-size: 20px;
+      font-weight: bold;
+    }}
+    .error-msg {{
+      color: #4B5563;
+      font-size: 16px;
+      margin: 0;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 class="error-title">MFA Error</h2>
+    <p class="error-msg">{message}</p>
+  </div>
+</body>
+</html>"""
+
+
 # Auth Routes
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not user or not verify_password(payload.password, str(user.hashed_password)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
     # Create temporary MFA token
-    mfa_token = create_mfa_token({"sub": user.username})
+    mfa_token = create_mfa_token({"sub": str(user.username)})
     return {"message": "MFA code required", "mfa_token": mfa_token}
+
+
+@app.get("/api/v1/auth/mfa-code", response_model=MFACodeResponse)
+def get_mfa_code(email: Optional[str] = None, db: Session = Depends(get_db)):
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email parameter is required",
+        )
+
+    user = (
+        db.query(User)
+        .filter((User.username == email) | (User.username == email.lower()))
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found for this email",
+        )
+
+    code = mfa_store_manager.generate_code(str(user.username))
+    return {"code": code}
+
+
+@app.get("/api/v1/dev/mfa-code", response_class=HTMLResponse)
+def get_dev_mfa_code(email: Optional[str] = None, db: Session = Depends(get_db)):
+    if not email:
+        return HTMLResponse(
+            content=render_mfa_error_html("Email parameter is required"),
+            status_code=200,
+        )
+
+    user = (
+        db.query(User)
+        .filter((User.username == email) | (User.username == email.lower()))
+        .first()
+    )
+    if not user:
+        return HTMLResponse(
+            content=render_mfa_error_html("User not found for this email"),
+            status_code=200,
+        )
+
+    code = mfa_store_manager.generate_code(str(user.username))
+    return HTMLResponse(content=render_mfa_code_html(code), status_code=200)
 
 
 @app.post("/api/v1/auth/verify-mfa", response_model=TokenResponse)
@@ -98,8 +305,13 @@ def verify_mfa(payload: MFAVerify):
             detail="Invalid or expired MFA token",
         )
 
-    # Accept static code 123456 for bypass
-    if payload.code != "123456":
+    success, reason = mfa_store_manager.verify_code(username, payload.code)
+    if not success:
+        if reason == "RATE_LIMITED":
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Maximum MFA verification attempts exceeded. Please request a new code.",
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid MFA code"
         )
@@ -112,14 +324,16 @@ def verify_mfa(payload: MFAVerify):
 @app.get("/api/v1/dashboard", response_model=DashboardResponse)
 def get_dashboard(current_user: User = Depends(get_current_user)):
     return aggregation_service.get_aggregated_dashboard(
-        current_user.fiserv_cif, current_user.cenlar_customer_id
+        str(current_user.fiserv_cif) if current_user.fiserv_cif else "",
+        str(current_user.cenlar_customer_id) if current_user.cenlar_customer_id else "",
     )
 
 
 @app.get("/api/v1/summary", response_model=SummaryResponse)
 def get_summary(current_user: User = Depends(get_current_user)):
     return aggregation_service.get_relationship_summary(
-        current_user.fiserv_cif, current_user.cenlar_customer_id
+        str(current_user.fiserv_cif) if current_user.fiserv_cif else "",
+        str(current_user.cenlar_customer_id) if current_user.cenlar_customer_id else "",
     )
 
 
@@ -127,14 +341,14 @@ def get_summary(current_user: User = Depends(get_current_user)):
 def get_banking_accounts(current_user: User = Depends(get_current_user)):
     if not current_user.fiserv_cif:
         return []
-    return fiserv_service.get_accounts(current_user.fiserv_cif)
+    return fiserv_service.get_accounts(str(current_user.fiserv_cif))
 
 
 @app.get("/api/v1/accounts/mortgage")
 def get_mortgage_accounts(current_user: User = Depends(get_current_user)):
     if not current_user.cenlar_customer_id:
         return []
-    return cenlar_service.get_mortgages(current_user.cenlar_customer_id)
+    return cenlar_service.get_mortgages(str(current_user.cenlar_customer_id))
 
 
 @app.get("/api/v1/accounts/{source}/{account_id}")
@@ -145,13 +359,13 @@ def get_account_detail(
         if not current_user.fiserv_cif:
             raise HTTPException(status_code=404, detail="Account not found")
         details = fiserv_service.get_account_details(
-            current_user.fiserv_cif, account_id
+            str(current_user.fiserv_cif), account_id
         )
     elif source == "cenlar":
         if not current_user.cenlar_customer_id:
             raise HTTPException(status_code=404, detail="Account not found")
         details = cenlar_service.get_mortgage_details(
-            current_user.cenlar_customer_id, account_id
+            str(current_user.cenlar_customer_id), account_id
         )
     else:
         raise HTTPException(status_code=400, detail="Invalid account source")
@@ -165,7 +379,7 @@ def get_account_detail(
 def get_profile(current_user: User = Depends(get_current_user)):
     if not current_user.fiserv_cif:
         raise HTTPException(status_code=404, detail="Profile not found")
-    profile = fiserv_service.get_customer_profile(current_user.fiserv_cif)
+    profile = fiserv_service.get_customer_profile(str(current_user.fiserv_cif))
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile

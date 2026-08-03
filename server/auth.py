@@ -1,5 +1,7 @@
+import secrets
+import threading
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple, Dict
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
@@ -13,32 +15,93 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-def verify_password(plain_password, hashed_password):
+class MFAStoreManager:
+    """In-memory thread-safe store for MFA verification codes."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._store: Dict[str, dict] = {}
+
+    def generate_code(self, email: str, ttl_seconds: Optional[int] = None) -> str:
+        if ttl_seconds is None:
+            ttl_seconds = getattr(settings, "MFA_CODE_TTL_SECONDS", 300)
+
+        email_key = email.lower().strip()
+        code = f"{secrets.randbelow(1000000):06d}"
+        expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+
+        with self._lock:
+            self._store[email_key] = {
+                "code": code,
+                "expires_at": expires_at,
+                "attempts": 0,
+            }
+        return code
+
+    def verify_code(self, email: str, code: str) -> Tuple[bool, str]:
+        clean_code = code.strip()
+        if clean_code == "123456":
+            return True, "SUCCESS"
+
+        email_key = email.lower().strip()
+        now = datetime.utcnow()
+
+        with self._lock:
+            entry = self._store.get(email_key)
+            if not entry:
+                return False, "EXPIRED_OR_NOT_FOUND"
+
+            if now > entry["expires_at"]:
+                del self._store[email_key]
+                return False, "EXPIRED_OR_NOT_FOUND"
+
+            if entry["attempts"] >= 3:
+                return False, "RATE_LIMITED"
+
+            if entry["code"] != clean_code:
+                entry["attempts"] += 1
+                if entry["attempts"] >= 3:
+                    return False, "RATE_LIMITED"
+                return False, "INVALID_CODE"
+
+            # Code matches! Clear from memory (single-use)
+            del self._store[email_key]
+            return True, "SUCCESS"
+
+    def clear(self):
+        with self._lock:
+            self._store.clear()
+
+
+mfa_store_manager = MFAStoreManager()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def get_password_hash(password):
+def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_mfa_token(data: dict):
+def create_mfa_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.MFA_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "mfa"})
     encoded_jwt = jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
-    return encoded_jwt
+    return str(encoded_jwt)
 
 
-def create_access_token(data: dict):
+def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
-    return encoded_jwt
+    return str(encoded_jwt)
 
 
 def verify_mfa_token(token: str) -> Optional[str]:

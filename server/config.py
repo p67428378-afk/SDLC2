@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     MFA_TOKEN_EXPIRE_MINUTES: int = 5
+    MFA_CODE_TTL_SECONDS: int = int(os.getenv("MFA_CODE_TTL_SECONDS", "300"))
     ALLOWED_ORIGINS: str = os.getenv(
         "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
     )

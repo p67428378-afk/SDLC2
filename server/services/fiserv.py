@@ -300,7 +300,15 @@ class FiservLiveService(FiservMockService):
 
                 url = f"{self.base_url}/acctservice/acctmgmt/accounts/secured"
                 body = {
-                    "AcctSel": {"AcctKeys": {"AcctId": acct_id, "AcctType": api_type}}
+                    "AcctSel": {
+                        "AcctKeys": [
+                            {
+                                "AcctId": acct_id,
+                                "AcctType": api_type,
+                            }
+                        ]
+                    },
+                    "IncCtrlList": {"IncCtrl": "IncCtrlOptional"},
                 }
 
                 res_json = self._make_api_call(url, body)

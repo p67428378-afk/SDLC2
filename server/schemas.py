@@ -13,6 +13,10 @@ class LoginResponse(BaseModel):
     mfa_token: str
 
 
+class MFACodeResponse(BaseModel):
+    code: str
+
+
 class MFAVerify(BaseModel):
     mfa_token: str
     code: str
