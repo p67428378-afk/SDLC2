@@ -68,7 +68,8 @@ export default function RelationshipOverviewPage() {
           Relationship Overview
         </h1>
         <p className="font-body-md text-text-secondary mt-1">
-          A comprehensive view of your entire relationship with ApexUnion Bank.
+          A comprehensive view of your entire relationship with Toyota Financial
+          Services.
         </p>
       </div>
 

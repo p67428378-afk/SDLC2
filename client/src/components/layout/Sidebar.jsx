@@ -29,7 +29,7 @@ export default function Sidebar({ userProfile }) {
             account_balance
           </span>
           <span className="font-headline-sm text-white tracking-tight">
-            ApexUnion Bank
+            TFS
           </span>
         </div>
       </div>

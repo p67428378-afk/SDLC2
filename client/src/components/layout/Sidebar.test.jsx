@@ -25,6 +25,7 @@ describe("Sidebar", () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByText("TFS")).toBeInTheDocument();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Account Summary")).toBeInTheDocument();
     expect(screen.getByText("Relationship Overview")).toBeInTheDocument();

@@ -24,6 +24,7 @@ describe("LoginPage Component", () => {
         <LoginPage />
       </BrowserRouter>,
     );
+    expect(screen.getByText("Toyota Financial Services")).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(
