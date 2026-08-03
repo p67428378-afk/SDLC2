@@ -32,6 +32,12 @@ export const authService = {
     });
     return response.data;
   },
+  getMfaCode: async (email) => {
+    const response = await api.get("/api/v1/auth/mfa-code", {
+      params: { email },
+    });
+    return response.data;
+  },
   verifyMfa: async (mfaToken, code) => {
     const response = await api.post("/api/v1/auth/verify-mfa", {
       mfa_token: mfaToken,
