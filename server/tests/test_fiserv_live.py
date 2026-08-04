@@ -64,6 +64,25 @@ def test_get_token_success(mock_post, live_settings):
 
 
 @patch("httpx.post")
+def test_get_token_string_expires_in(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    # Fiserv returns expires_in as string "3600"
+    mock_response.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": "3600",
+        "token_type": "Bearer",
+    }
+    mock_post.return_value = mock_response
+
+    token = service._get_token()
+    assert token == "mock-access-token"
+    assert service._token_expires_at is not None
+
+
+@patch("httpx.post")
 def test_get_accounts_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
@@ -85,7 +104,8 @@ def test_get_accounts_success(mock_post, live_settings):
         },
         "AcctRec": {
             "DepositAcctInfo": {
-                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 15000.50}}]
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 15000.50}}],
             }
         },
     }
@@ -153,8 +173,92 @@ def test_get_accounts_success(mock_post, live_settings):
 
 
 @patch("httpx.post")
+def test_get_accounts_parses_live_fiserv_data(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": "3600",
+    }
+
+    mock_dda_resp = MagicMock()
+    mock_dda_resp.status_code = 200
+    mock_dda_resp.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "Nickname": "Premier Checking",
+                "Rate": "0.0",
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 12500.50}}],
+            }
+        },
+    }
+
+    mock_sav_resp = MagicMock()
+    mock_sav_resp.status_code = 200
+    mock_sav_resp.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctTitle": "High Yield Savings",
+                "Rate": "5.5",
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 45000.00}}],
+            }
+        },
+    }
+
+    mock_cd_resp = MagicMock()
+    mock_cd_resp.status_code = 200
+    mock_cd_resp.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "Nickname": "12-Month CD",
+                "Rate": "4.5",
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 10000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_dda_resp,
+        mock_sav_resp,
+        mock_cd_resp,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 3
+
+    # Checking account
+    assert accounts[0]["id"] == "5041733"
+    assert accounts[0]["name"] == "Premier Checking"
+    assert accounts[0]["interest_rate"] == 0.0
+    assert accounts[0]["status"] == "Active"
+    assert accounts[0]["transactions"] == []
+
+    # Savings account
+    assert accounts[1]["id"] == "302034131"
+    assert accounts[1]["name"] == "High Yield Savings"
+    assert accounts[1]["interest_rate"] == 5.5
+    assert accounts[1]["status"] == "Active"
+    assert accounts[1]["transactions"] == []
+
+    # CD account
+    assert accounts[2]["id"] == "290001702"
+    assert accounts[2]["name"] == "12-Month CD"
+    assert accounts[2]["interest_rate"] == 4.5
+    assert accounts[2]["status"] == "Active"
+    assert accounts[2]["transactions"] == []
+
+
+@patch("httpx.post")
 def test_get_accounts_loan_type_exclusion(mock_post, live_settings):
-    # Test that Loan / DDL account type is excluded in live mode
     settings = Settings(
         FISERV_MODE="live",
         FISERV_API_KEY="test-key",
@@ -167,7 +271,6 @@ def test_get_accounts_loan_type_exclusion(mock_post, live_settings):
     service = FiservLiveService(settings)
 
     accounts = service.get_accounts("CIF-982341")
-    # Loan account should be excluded
     assert len(accounts) == 0
 
 
@@ -182,7 +285,6 @@ def test_get_accounts_business_error_handling(mock_post, live_settings):
         "expires_in": 3600,
     }
 
-    # First account returns StatusCode 1120 (Account Not On File) with HTTP 200
     mock_business_err = MagicMock()
     mock_business_err.status_code = 200
     mock_business_err.json.return_value = {
@@ -196,7 +298,6 @@ def test_get_accounts_business_error_handling(mock_post, live_settings):
         }
     }
 
-    # Second account succeeds
     mock_acct_success = MagicMock()
     mock_acct_success.status_code = 200
     mock_acct_success.json.return_value = {
@@ -216,7 +317,6 @@ def test_get_accounts_business_error_handling(mock_post, live_settings):
     ]
 
     accounts = service.get_accounts("CIF-982341")
-    # Account with business error should be skipped gracefully
     assert len(accounts) == 2
     assert accounts[0]["id"] == "302034131"
 

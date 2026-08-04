@@ -257,7 +257,7 @@ class FiservLiveService(FiservMockService):
         response.raise_for_status()
         res_json = response.json()
         self._token = res_json["access_token"]
-        expires_in = res_json.get("expires_in", 3600)
+        expires_in = int(res_json.get("expires_in", 3600))
         self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
         return self._token
 
@@ -348,27 +348,26 @@ class FiservLiveService(FiservMockService):
                         cur_amt = acct_bal_list[0].get("CurAmt", {})
                         balance = float(cur_amt.get("Amt", 0.0))
 
-                mock_acct = None
-                for mock_list in self.accounts.values():
-                    for ma in mock_list:
-                        if (
-                            ma["id"] == f"fiserv-{acct_type.lower()[:3]}-1"
-                            or ma["type"].lower() == acct_type.lower()
-                            or (
-                                acct_type in ("SDA", "Savings")
-                                and ma["type"] == "Savings"
-                            )
-                            or (acct_type in ("CDA", "CD") and ma["type"] == "CD")
-                            or (acct_type in ("DDL", "Loan") and ma["type"] == "Loan")
-                        ):
-                            mock_acct = ma
-                            break
-                    if mock_acct:
-                        break
+                raw_rate = info.get("Rate", 0)
+                try:
+                    interest_rate = float(raw_rate)
+                except (TypeError, ValueError):
+                    interest_rate = 0.0
 
-                name = mock_acct["name"] if mock_acct else f"{acct_type} Account"
-                interest_rate = mock_acct["interest_rate"] if mock_acct else 0.0
-                transactions = mock_acct["transactions"] if mock_acct else []
+                status = info.get("AcctDtlStatus", "Unknown")
+
+                type_labels = {
+                    "DDA": "Checking Account",
+                    "Savings": "Savings Account",
+                    "SDA": "Savings Account",
+                    "CD": "Certificate of Deposit",
+                    "CDA": "Certificate of Deposit",
+                }
+                name = (
+                    info.get("Nickname")
+                    or info.get("AcctTitle")
+                    or type_labels.get(acct_type, f"{acct_type} Account")
+                )
 
                 accounts.append(
                     {
@@ -378,8 +377,8 @@ class FiservLiveService(FiservMockService):
                         "account_number": f"•••• {acct_id[-4:]}",
                         "balance": balance,
                         "interest_rate": interest_rate,
-                        "status": "Active",
-                        "transactions": transactions,
+                        "status": status,
+                        "transactions": [],
                     }
                 )
             except Exception as e:
