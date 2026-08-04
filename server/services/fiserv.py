@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -210,6 +211,14 @@ class FiservMockService(CoreBankingService):
 
 
 class FiservLiveService(FiservMockService):
+    # Short window: avoids re-hitting the live sandbox on every page navigation
+    # (dashboard, summary, accounts, and account-detail views all call get_accounts()).
+    _FRESH_TTL = timedelta(seconds=20)
+    # Longer window: if a refresh comes back degraded (fewer accounts than expected)
+    # because of a transient sandbox blip, serve the last known-good snapshot instead
+    # of a partial/empty account list.
+    _STALE_TTL = timedelta(minutes=5)
+
     def __init__(self, settings):
         super().__init__()
         self.api_key = settings.FISERV_API_KEY
@@ -221,6 +230,9 @@ class FiservLiveService(FiservMockService):
 
         self._token = None
         self._token_expires_at = None
+
+        self._accounts_cache = None
+        self._accounts_cache_at = None
 
         self.accounts_to_query = []
         if self.demo_accounts:
@@ -283,7 +295,52 @@ class FiservLiveService(FiservMockService):
         response.raise_for_status()
         return response.json()
 
+    def _call_with_retry(self, url: str, json_body: dict, attempts: int = 2) -> dict:
+        # Retries only transport-level failures (timeouts, connection resets), which is
+        # what a flaky cert sandbox typically produces. Business errors (non-zero
+        # StatusCode) and HTTP error responses are not retried here - they're handled
+        # by the caller.
+        last_exc = None
+        for attempt in range(attempts):
+            try:
+                return self._make_api_call(url, json_body)
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_exc = e
+                if attempt < attempts - 1:
+                    time.sleep(0.3)
+        raise last_exc
+
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
+        now = datetime.utcnow()
+        if (
+            self._accounts_cache is not None
+            and self._accounts_cache_at is not None
+            and now - self._accounts_cache_at < self._FRESH_TTL
+        ):
+            return self._accounts_cache
+
+        fresh_accounts = self._fetch_accounts_live(cif)
+
+        expected = len(
+            [a for a in self.accounts_to_query if a["type"] not in ("Loan", "DDL")]
+        )
+        if (
+            len(fresh_accounts) < expected
+            and self._accounts_cache is not None
+            and self._accounts_cache_at is not None
+            and now - self._accounts_cache_at < self._STALE_TTL
+        ):
+            print(
+                f"Fiserv live fetch returned {len(fresh_accounts)}/{expected} accounts; "
+                f"serving last known-good snapshot from {self._accounts_cache_at.isoformat()}."
+            )
+            return self._accounts_cache
+
+        self._accounts_cache = fresh_accounts
+        self._accounts_cache_at = now
+        return fresh_accounts
+
+    def _fetch_accounts_live(self, cif: str) -> List[Dict[str, Any]]:
         accounts = []
         for acct in self.accounts_to_query:
             try:
@@ -315,7 +372,7 @@ class FiservLiveService(FiservMockService):
                     }
                 }
 
-                res_json = self._make_api_call(url, body)
+                res_json = self._call_with_retry(url, body)
 
                 # Inspect Status.StatusCode for business errors (HTTP 200 with non-zero StatusCode)
                 status_info = res_json.get("Status", {})

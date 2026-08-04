@@ -1,6 +1,7 @@
 import json
 import pytest
 import httpx
+from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 from server.config import Settings
 from server.services.fiserv import (
@@ -365,6 +366,109 @@ def test_get_accounts_graceful_degradation(mock_post, live_settings):
     assert len(accounts) == 2
     assert accounts[0]["id"] == "5041733"
     assert accounts[1]["id"] == "290001702"
+
+
+@patch("httpx.post")
+def test_get_accounts_uses_cache_within_ttl(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_ok = MagicMock()
+    mock_ok.status_code = 200
+    mock_ok.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [mock_token_resp, mock_ok, mock_ok, mock_ok]
+    first = service.get_accounts("CIF-982341")
+    assert len(first) == 3
+    assert mock_post.call_count == 4
+
+    # A second call within the fresh-cache window (e.g. navigating between the
+    # dashboard, summary, and account pages) must not re-hit the live sandbox.
+    second = service.get_accounts("CIF-982341")
+    assert second == first
+    assert mock_post.call_count == 4
+
+
+@patch("httpx.post")
+def test_get_accounts_stale_fallback_on_degradation(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_ok = MagicMock()
+    mock_ok.status_code = 200
+    mock_ok.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}],
+            }
+        },
+    }
+
+    # First call succeeds fully and populates the known-good snapshot.
+    mock_post.side_effect = [mock_token_resp, mock_ok, mock_ok, mock_ok]
+    first = service.get_accounts("CIF-982341")
+    assert len(first) == 3
+
+    # Simulate time passing past the fresh-cache TTL but still within the stale window.
+    service._accounts_cache_at = datetime.utcnow() - timedelta(seconds=30)
+
+    # Simulate every account call failing on this refresh cycle (sandbox blip).
+    mock_post.side_effect = httpx.ConnectError("boom")
+    degraded = service.get_accounts("CIF-982341")
+
+    # Instead of surfacing an empty/partial deposit account list to the user,
+    # the last known-good snapshot is served.
+    assert degraded == first
+
+
+@patch("httpx.post")
+def test_get_accounts_retries_transient_network_error(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_ok = MagicMock()
+    mock_ok.status_code = 200
+    mock_ok.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}],
+            }
+        },
+    }
+
+    # The first account's call times out once, then succeeds on retry.
+    mock_post.side_effect = [
+        mock_token_resp,
+        httpx.ConnectError("boom"),
+        mock_ok,
+        mock_ok,
+        mock_ok,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 3
+    assert accounts[0]["id"] == "5041733"
 
 
 @patch("httpx.post")
