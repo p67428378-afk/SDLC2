@@ -546,16 +546,119 @@ def test_raw_source_in_live_and_mock_mode(live_settings):
     assert "raw_source" not in mock_details
 
 
-def test_not_implemented_methods(live_settings):
+def _mock_account_response(amount, status="Active"):
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": status,
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": amount}}],
+            }
+        },
+    }
+    return resp
+
+
+@patch("httpx.post")
+def test_debit_and_credit_are_simulated(mock_post, live_settings):
+    # Fiserv's live sandbox has no real funds-movement endpoint. Payments must be
+    # simulated locally rather than raising NotImplementedError, so the mortgage
+    # payment flow (Fiserv debit -> Cenlar post) can complete end to end.
     service = FiservLiveService(live_settings)
-    with pytest.raises(NotImplementedError):
-        service.get_available_balance("5041733")
-    with pytest.raises(NotImplementedError):
-        service.debit_account("5041733", 100.0)
-    with pytest.raises(NotImplementedError):
-        service.credit_account("5041733", 100.0)
-    with pytest.raises(NotImplementedError):
-        service.validate_account("5041733")
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        _mock_account_response(500.0),
+        _mock_account_response(1000.0),
+        _mock_account_response(2000.0),
+    ]
+    accounts = service.get_accounts("CIF-982341")
+    savings = next(a for a in accounts if a["id"] == "302034131")
+    assert savings["balance"] == 1000.0
+
+    assert service.debit_account("302034131", 250.0) is True
+    assert service.get_available_balance("302034131") == 750.0
+
+    assert service.credit_account("302034131", 100.0) is True
+    assert service.get_available_balance("302034131") == 850.0
+
+
+@patch("httpx.post")
+def test_debit_account_insufficient_funds(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        _mock_account_response(50.0),
+        _mock_account_response(1000.0),
+        _mock_account_response(2000.0),
+    ]
+
+    assert service.debit_account("5041733", 100.0) is False
+    assert service.debit_account("no-such-account", 1.0) is False
+
+
+@patch("httpx.post")
+def test_validate_account_live(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        _mock_account_response(500.0),
+        _mock_account_response(1000.0),
+        _mock_account_response(2000.0),
+    ]
+
+    assert service.validate_account("5041733") is True
+    assert service.validate_account("no-such-account") is False
+
+
+@patch("httpx.post")
+def test_simulated_payment_persists_across_cache_refresh(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "tok", "expires_in": 3600}
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        _mock_account_response(500.0),
+        _mock_account_response(1000.0),
+        _mock_account_response(2000.0),
+    ]
+    service.get_accounts("CIF-982341")
+    assert service.debit_account("302034131", 250.0) is True
+
+    # Force the fresh-cache TTL to have elapsed so the next get_accounts() call
+    # re-fetches from the (mocked) live sandbox, which still reports the original,
+    # un-adjusted balance of 1000.0 for the savings account.
+    service._accounts_cache_at = datetime.utcnow() - timedelta(seconds=30)
+    mock_post.side_effect = [
+        _mock_account_response(500.0),
+        _mock_account_response(1000.0),
+        _mock_account_response(2000.0),
+    ]
+    refreshed = service.get_accounts("CIF-982341")
+    savings = next(a for a in refreshed if a["id"] == "302034131")
+
+    # The simulated debit must still be reflected - it should not revert just
+    # because the live sandbox was re-queried.
+    assert savings["balance"] == 750.0
 
 
 def test_factory_pattern():

@@ -233,6 +233,10 @@ class FiservLiveService(FiservMockService):
 
         self._accounts_cache = None
         self._accounts_cache_at = None
+        # Fiserv's live sandbox has no real funds-movement endpoint, so payments are
+        # simulated: net debit/credit per account, layered on top of whatever the
+        # sandbox reports on each refresh (see _apply_balance_adjustment).
+        self._balance_adjustments: Dict[str, float] = {}
 
         self.accounts_to_query = []
         if self.demo_accounts:
@@ -300,7 +304,7 @@ class FiservLiveService(FiservMockService):
         # what a flaky cert sandbox typically produces. Business errors (non-zero
         # StatusCode) and HTTP error responses are not retried here - they're handled
         # by the caller.
-        last_exc = None
+        last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             try:
                 return self._make_api_call(url, json_body)
@@ -308,7 +312,9 @@ class FiservLiveService(FiservMockService):
                 last_exc = e
                 if attempt < attempts - 1:
                     time.sleep(0.3)
-        raise last_exc
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("_call_with_retry called with attempts <= 0")
 
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
@@ -405,6 +411,10 @@ class FiservLiveService(FiservMockService):
                         cur_amt = acct_bal_list[0].get("CurAmt", {})
                         balance = float(cur_amt.get("Amt", 0.0))
 
+                balance = round(
+                    balance + self._balance_adjustments.get(acct_id, 0.0), 2
+                )
+
                 raw_rate = info.get("Rate", 0)
                 try:
                     interest_rate = float(raw_rate)
@@ -454,17 +464,49 @@ class FiservLiveService(FiservMockService):
                 return acc
         return None
 
+    def _find_live_account(self, account_id: str) -> Optional[Dict[str, Any]]:
+        for acc in self.get_accounts(""):
+            if acc["id"] == account_id:
+                return acc
+        return None
+
+    def _apply_balance_adjustment(self, account_id: str, delta: float) -> None:
+        self._balance_adjustments[account_id] = round(
+            self._balance_adjustments.get(account_id, 0.0) + delta, 2
+        )
+        # Reflect immediately in whatever is currently cached, so a payment made this
+        # request is visible without waiting for the next live refresh.
+        if self._accounts_cache:
+            for acc in self._accounts_cache:
+                if acc["id"] == account_id:
+                    acc["balance"] = round(acc["balance"] + delta, 2)
+                    break
+
     def get_available_balance(self, account_id: str) -> Optional[float]:
-        raise NotImplementedError("Payments are not supported in live mode.")
+        acc = self._find_live_account(account_id)
+        if not acc:
+            return None
+        return acc["balance"]
 
     def debit_account(self, account_id: str, amount: float) -> bool:
-        raise NotImplementedError("Payments are not supported in live mode.")
+        acc = self._find_live_account(account_id)
+        if not acc or acc["balance"] < amount:
+            return False
+        self._apply_balance_adjustment(account_id, -amount)
+        return True
 
     def credit_account(self, account_id: str, amount: float) -> bool:
-        raise NotImplementedError("Payments are not supported in live mode.")
+        acc = self._find_live_account(account_id)
+        if not acc:
+            return False
+        self._apply_balance_adjustment(account_id, amount)
+        return True
 
     def validate_account(self, account_id: str) -> bool:
-        raise NotImplementedError("Payments are not supported in live mode.")
+        acc = self._find_live_account(account_id)
+        if not acc:
+            return False
+        return acc["type"] in ("DDA", "Savings") and acc["status"] == "Active"
 
 
 _service_instance: Optional[CoreBankingService] = None
