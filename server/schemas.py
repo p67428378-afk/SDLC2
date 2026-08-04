@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import date
 
 
@@ -79,6 +79,7 @@ class DepositAccount(BaseModel):
     balance: float
     interest_rate: float
     status: str
+    raw_source: Optional[Dict[str, Any]] = None
 
 
 class LoanAccount(BaseModel):
@@ -89,6 +90,7 @@ class LoanAccount(BaseModel):
     balance: float
     interest_rate: float
     status: str
+    raw_source: Optional[Dict[str, Any]] = None
 
 
 class MortgageAccount(BaseModel):
@@ -104,6 +106,7 @@ class MortgageAccount(BaseModel):
     next_payment_amount: float
     next_payment_due: str
     status: str
+    raw_source: Optional[Dict[str, Any]] = None
 
 
 class DashboardAccounts(BaseModel):

@@ -124,6 +124,8 @@ def test_get_accounts_success(mock_post, live_settings):
     assert accounts[0]["balance"] == 15000.50
     assert accounts[0]["account_number"] == "•••• 1733"
     assert accounts[0]["status"] == "Active"
+    assert "raw_source" in accounts[0]
+    assert accounts[0]["raw_source"] == mock_acct_resp.json.return_value
 
     # Verify call parameters sent to Fiserv
     account_calls = mock_post.call_args_list[1:]
@@ -241,6 +243,7 @@ def test_get_accounts_parses_live_fiserv_data(mock_post, live_settings):
     assert accounts[0]["interest_rate"] == 0.0
     assert accounts[0]["status"] == "Active"
     assert accounts[0]["transactions"] == []
+    assert accounts[0]["raw_source"] == mock_dda_resp.json.return_value
 
     # Savings account
     assert accounts[1]["id"] == "302034131"
@@ -248,6 +251,7 @@ def test_get_accounts_parses_live_fiserv_data(mock_post, live_settings):
     assert accounts[1]["interest_rate"] == 5.5
     assert accounts[1]["status"] == "Active"
     assert accounts[1]["transactions"] == []
+    assert accounts[1]["raw_source"] == mock_sav_resp.json.return_value
 
     # CD account
     assert accounts[2]["id"] == "290001702"
@@ -255,6 +259,7 @@ def test_get_accounts_parses_live_fiserv_data(mock_post, live_settings):
     assert accounts[2]["interest_rate"] == 4.5
     assert accounts[2]["status"] == "Active"
     assert accounts[2]["transactions"] == []
+    assert accounts[2]["raw_source"] == mock_cd_resp.json.return_value
 
 
 @patch("httpx.post")
@@ -394,6 +399,47 @@ def test_token_refresh_on_401(mock_post, live_settings):
     res = service._make_api_call(url, {})
     assert res["AcctRec"]["DepositAcctInfo"]["AcctBal"][0]["CurAmt"]["Amt"] == 500.0
     assert service._token == "new-token"
+
+
+def test_raw_source_in_live_and_mock_mode(live_settings):
+    live_service = FiservLiveService(live_settings)
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {"access_token": "token", "expires_in": 3600}
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0", "StatusDesc": "Success"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}],
+            }
+        },
+    }
+
+    # Provide enough responses for both get_accounts calls (1 token + 3 accts + 1 cached_token + 3 accts)
+    responses = [mock_token_resp] + [mock_acct_resp] * 10
+    with patch("httpx.post", side_effect=responses):
+        accounts = live_service.get_accounts("CIF-982341")
+        assert len(accounts) == 3
+        assert "raw_source" in accounts[0]
+        assert accounts[0]["raw_source"] == mock_acct_resp.json.return_value
+
+        account_details = live_service.get_account_details("CIF-982341", "5041733")
+        assert account_details is not None
+        assert "raw_source" in account_details
+        assert account_details["raw_source"] == mock_acct_resp.json.return_value
+
+    mock_service = FiservMockService()
+    mock_accounts = mock_service.get_accounts("CIF-982341")
+    assert len(mock_accounts) > 0
+    assert "raw_source" not in mock_accounts[0]
+
+    mock_details = mock_service.get_account_details("CIF-982341", "fiserv-dda-1")
+    assert mock_details is not None
+    assert "raw_source" not in mock_details
 
 
 def test_not_implemented_methods(live_settings):

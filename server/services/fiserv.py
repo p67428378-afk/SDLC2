@@ -379,6 +379,7 @@ class FiservLiveService(FiservMockService):
                         "interest_rate": interest_rate,
                         "status": status,
                         "transactions": [],
+                        "raw_source": res_json,
                     }
                 )
             except Exception as e:
@@ -409,7 +410,7 @@ class FiservLiveService(FiservMockService):
         raise NotImplementedError("Payments are not supported in live mode.")
 
 
-_service_instance = None
+_service_instance: Optional[CoreBankingService] = None
 
 
 def get_core_banking_service() -> CoreBankingService:

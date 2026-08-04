@@ -882,6 +882,18 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "raw_source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Source"
           }
         },
         "type": "object",
@@ -938,6 +950,18 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "raw_source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Source"
           }
         },
         "type": "object",
@@ -1050,6 +1074,18 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "raw_source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Source"
           }
         },
         "type": "object",
