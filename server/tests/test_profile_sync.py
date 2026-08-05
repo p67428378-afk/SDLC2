@@ -1,11 +1,9 @@
+from unittest.mock import patch, MagicMock
 from server.tests.test_payments import get_auth_headers
+from server.services.fiserv import FiservLiveService
 
 
 def test_successful_profile_update_and_sync(client):
-    # AC: User can edit address, phone, email, and communication preferences
-    # AC: On save, Fiserv profile reflects new values
-    # AC: On save, Cenlar borrower profile reflects new values
-    # AC: Change recorded in ProfileChangeLog audit table
     headers = get_auth_headers(client)
 
     payload = {
@@ -31,7 +29,6 @@ def test_successful_profile_update_and_sync(client):
     assert data["preferences"]["sms_notif"] is True
     assert data["preferences"]["marketing"] is False
 
-    # Verify GET /api/v1/profile reflects new values
     response = client.get("/api/v1/profile", headers=headers)
     assert response.status_code == 200
     profile = response.json()
@@ -39,7 +36,6 @@ def test_successful_profile_update_and_sync(client):
     assert profile["phone"] == payload["phone"]
     assert profile["email"] == payload["email"]
 
-    # Verify ProfileChangeLog record created
     response = client.get("/api/v1/profile/history", headers=headers)
     assert response.status_code == 200
     history = response.json()
@@ -52,11 +48,8 @@ def test_successful_profile_update_and_sync(client):
 
 
 def test_profile_validation_rejection(client):
-    # AC: Invalid email/phone/missing fields rejected with clear messages
-    # AC: Submission blocked until valid
     headers = get_auth_headers(client)
 
-    # Test invalid email
     payload = {
         "address": "456 Wall Street, New York, NY 10005",
         "phone": "212-555-0199",
@@ -72,14 +65,12 @@ def test_profile_validation_rejection(client):
     assert response.status_code == 400
     assert "email" in response.json()["detail"]
 
-    # Test invalid phone
     payload["email"] = "valid@example.com"
     payload["phone"] = "123"
     response = client.put("/api/v1/profile", headers=headers, json=payload)
     assert response.status_code == 400
     assert "phone" in response.json()["detail"]
 
-    # Test missing/short address
     payload["phone"] = "212-555-0199"
     payload["address"] = "   "
     response = client.put("/api/v1/profile", headers=headers, json=payload)
@@ -88,15 +79,12 @@ def test_profile_validation_rejection(client):
 
 
 def test_cenlar_sync_failure_rollback(client):
-    # AC: Simulated Cenlar sync failure rolls back Fiserv update (profiles stay consistent)
     headers = get_auth_headers(client)
 
-    # Get initial profile values
     response = client.get("/api/v1/profile", headers=headers)
     assert response.status_code == 200
     initial_profile = response.json()
 
-    # Set mock config to trigger Cenlar failure
     response = client.post("/api/v1/mock/config", json={"scenario": "error_cenlar"})
     assert response.status_code == 200
 
@@ -112,16 +100,13 @@ def test_cenlar_sync_failure_rollback(client):
         },
     }
 
-    # Attempt update (should fail with 422)
     response = client.put("/api/v1/profile", headers=headers, json=payload)
     assert response.status_code == 422
     assert "Failed to sync profile with Cenlar" in response.json()["detail"]
 
-    # Reset mock config
     response = client.post("/api/v1/mock/config", json={"scenario": None})
     assert response.status_code == 200
 
-    # Verify Fiserv profile was rolled back to initial values
     response = client.get("/api/v1/profile", headers=headers)
     assert response.status_code == 200
     current_profile = response.json()
@@ -129,7 +114,6 @@ def test_cenlar_sync_failure_rollback(client):
     assert current_profile["phone"] == initial_profile["phone"]
     assert current_profile["email"] == initial_profile["email"]
 
-    # Verify ProfileChangeLog record created with status = FAILED and compensation_applied = True
     response = client.get("/api/v1/profile/history", headers=headers)
     assert response.status_code == 200
     history = response.json()
@@ -139,7 +123,6 @@ def test_cenlar_sync_failure_rollback(client):
 
 
 def test_unauthorized_profile_access(client):
-    # AC: Call PUT /api/v1/profile without JWT token -> Assert 401 response
     payload = {
         "address": "456 Wall Street, New York, NY 10005",
         "phone": "212-555-0199",
@@ -153,3 +136,114 @@ def test_unauthorized_profile_access(client):
     }
     response = client.put("/api/v1/profile", json=payload)
     assert response.status_code == 401
+
+
+def test_profile_update_live_mode_entitlement_fallback(client):
+    headers = get_auth_headers(client)
+
+    payload = {
+        "address": "100 Financial Plaza, Dallas, TX 75201",
+        "phone": "214-555-0199",
+        "email": "live_fallback@example.com",
+        "preferences": {
+            "paperless": True,
+            "email_notif": True,
+            "sms_notif": False,
+            "marketing": True,
+        },
+    }
+
+    mock_403 = MagicMock()
+    mock_403.status_code = 403
+    mock_403.raise_for_status.side_effect = Exception("403 Forbidden")
+
+    # Patch fiserv_service to be FiservLiveService with mocked network calls returning 403
+    from server.main import profile_sync_service
+    from server.config import Settings
+
+    live_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="key",
+        FISERV_API_SECRET="secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    live_service = FiservLiveService(live_settings)
+
+    with patch.object(profile_sync_service, "fiserv_service", live_service):
+        with patch.object(live_service, "_get_token", return_value="mock-token"):
+            with patch("httpx.put", side_effect=[mock_403, mock_403]):
+                response = client.put("/api/v1/profile", headers=headers, json=payload)
+                assert response.status_code == 200
+                data = response.json()
+                assert data["address"] == payload["address"]
+                assert "metadata" in data
+                assert data["metadata"]["live_sync_available"] is False
+                assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+                assert data["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
+
+                # Verify history persists FALLBACK_SIMULATED and live_sync_available=False
+                res_hist = client.get("/api/v1/profile/history", headers=headers)
+                assert res_hist.status_code == 200
+                history = res_hist.json()
+                latest = history[0]
+                assert latest["status"] == "FALLBACK_SIMULATED"
+                assert latest["live_sync_available"] is False
+
+
+def test_profile_update_live_mode_success(client):
+    headers = get_auth_headers(client)
+
+    payload = {
+        "address": "200 Success Blvd, Dallas, TX 75202",
+        "phone": "214-555-0200",
+        "email": "live_success@example.com",
+        "preferences": {
+            "paperless": True,
+            "email_notif": True,
+            "sms_notif": True,
+            "marketing": False,
+        },
+    }
+
+    mock_ok = MagicMock()
+    mock_ok.status_code = 200
+    mock_ok.json.return_value = {
+        "PartyId": "CIF-982341",
+        "Status": {"StatusCode": 0, "Severity": "Info", "StatusDesc": "Success"},
+    }
+
+    from server.main import profile_sync_service
+    from server.config import Settings
+
+    live_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="key",
+        FISERV_API_SECRET="secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    live_service = FiservLiveService(live_settings)
+
+    with patch.object(profile_sync_service, "fiserv_service", live_service):
+        with patch.object(live_service, "_get_token", return_value="mock-token"):
+            with patch("httpx.put", return_value=mock_ok):
+                response = client.put("/api/v1/profile", headers=headers, json=payload)
+                assert response.status_code == 200
+                data = response.json()
+                assert data["address"] == payload["address"]
+                assert "metadata" in data
+                assert data["metadata"]["live_sync_available"] is True
+                assert data["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
+                assert data["metadata"]["fallback_reason"] is None
+
+                res_hist = client.get("/api/v1/profile/history", headers=headers)
+                assert res_hist.status_code == 200
+                history = res_hist.json()
+                latest = history[0]
+                assert latest["status"] == "SUCCESS"
+                assert latest["live_sync_available"] is True

@@ -41,6 +41,13 @@ class ProfilePreferences(BaseModel):
     sms_notif: bool
 
 
+class ProfileSyncMetadata(BaseModel):
+    fiserv_sync: str = "LIVE_SUCCESS"
+    cenlar_sync: str = "SIMULATED"
+    live_sync_available: bool = True
+    fallback_reason: Optional[str] = None
+
+
 class UserProfileResponse(BaseModel):
     cif: str
     first_name: str
@@ -50,6 +57,7 @@ class UserProfileResponse(BaseModel):
     address: str
     relationship_manager: str
     preferences: ProfilePreferences
+    metadata: Optional[ProfileSyncMetadata] = None
 
 
 class UserProfileUpdateRequest(BaseModel):
@@ -65,6 +73,7 @@ class ProfileChangeLogResponse(BaseModel):
     changed_fields_before: Dict
     changed_fields_after: Dict
     status: str
+    live_sync_available: Optional[bool] = False
     failure_reason: Optional[str] = None
     compensation_applied: bool
     compensation_details: Optional[Dict] = None

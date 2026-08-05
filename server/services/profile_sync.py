@@ -51,16 +51,31 @@ class ProfileSyncService:
         if not user.cenlar_customer_id:
             raise HTTPException(status_code=400, detail="User has no mortgage profile")
 
+        fiserv_cif = str(user.fiserv_cif)
+        cenlar_customer_id = str(user.cenlar_customer_id)
+
         # 2. Update Fiserv
         fiserv_profile_res = self.fiserv_service.update_customer_profile(
-            user.fiserv_cif, {"address": address, "phone": phone, "email": email}
+            fiserv_cif, {"address": address, "phone": phone, "email": email}
         )
         fiserv_pref_res = self.fiserv_service.update_communication_preferences(
-            user.fiserv_cif, preferences
+            fiserv_cif, preferences
         )
 
-        prev_fiserv_profile = fiserv_profile_res.get("previous_state", {})
-        prev_fiserv_pref = fiserv_pref_res.get("previous_state", {})
+        prev_fiserv_profile = fiserv_profile_res.get("previous_state") or {}
+        prev_fiserv_pref = fiserv_pref_res.get("previous_state") or {}
+
+        fiserv_profile_live = fiserv_profile_res.get("live_sync_available", True)
+        fiserv_pref_live = fiserv_pref_res.get("live_sync_available", True)
+        live_sync_available = bool(fiserv_profile_live and fiserv_pref_live)
+
+        fallback_reason = None
+        if not live_sync_available:
+            fallback_reason = (
+                fiserv_profile_res.get("fallback_reason")
+                or fiserv_pref_res.get("fallback_reason")
+                or "ENTITLEMENT_DENIED"
+            )
 
         # 3. Sync to Cenlar
         cenlar_profile_res = None
@@ -70,7 +85,7 @@ class ProfileSyncService:
 
         try:
             cenlar_profile_res = self.cenlar_service.update_borrower_profile(
-                user.cenlar_customer_id,
+                cenlar_customer_id,
                 {"address": address, "phone": phone, "email": email},
             )
             # Cenlar correspondence preferences only support paperless, email_notif, marketing
@@ -80,7 +95,7 @@ class ProfileSyncService:
                 "marketing": preferences.get("marketing", True),
             }
             cenlar_pref_res = self.cenlar_service.update_correspondence_preferences(
-                user.cenlar_customer_id, cenlar_prefs
+                cenlar_customer_id, cenlar_prefs
             )
             cenlar_success = True
         except Exception as e:
@@ -88,11 +103,9 @@ class ProfileSyncService:
 
         if not cenlar_success:
             # Compensate: rollback Fiserv
-            self.fiserv_service.update_customer_profile(
-                user.fiserv_cif, prev_fiserv_profile
-            )
+            self.fiserv_service.update_customer_profile(fiserv_cif, prev_fiserv_profile)
             self.fiserv_service.update_communication_preferences(
-                user.fiserv_cif, prev_fiserv_pref
+                fiserv_cif, prev_fiserv_pref
             )
 
             # Log failed attempt
@@ -113,7 +126,10 @@ class ProfileSyncService:
                 changed_fields_before=changed_fields_before,
                 changed_fields_after=changed_fields_after,
                 status="FAILED",
-                failure_reason=failure_reason or "Cenlar sync failed",
+                live_sync_available=live_sync_available,
+                failure_reason=failure_reason
+                or fallback_reason
+                or "Cenlar sync failed",
                 compensation_applied=True,
                 compensation_details={
                     "fiserv_profile_reverted": True,
@@ -131,8 +147,8 @@ class ProfileSyncService:
                 detail="Failed to sync profile with Cenlar; changes have been rolled back.",
             )
 
-        prev_cenlar_profile = cenlar_profile_res.get("previous_state", {})
-        prev_cenlar_pref = cenlar_pref_res.get("previous_state", {})
+        prev_cenlar_profile = (cenlar_profile_res or {}).get("previous_state") or {}
+        prev_cenlar_pref = (cenlar_pref_res or {}).get("previous_state") or {}
 
         # 4. Persist Audit Record
         changed_fields_before = {
@@ -148,11 +164,15 @@ class ProfileSyncService:
             "preferences": preferences,
         }
 
+        status_value = "SUCCESS" if live_sync_available else "FALLBACK_SIMULATED"
+
         log = ProfileChangeLog(
             user_id=user.id,
             changed_fields_before=changed_fields_before,
             changed_fields_after=changed_fields_after,
-            status="SUCCESS",
+            status=status_value,
+            live_sync_available=live_sync_available,
+            failure_reason=fallback_reason,
             compensation_applied=False,
         )
         db.add(log)
@@ -164,16 +184,14 @@ class ProfileSyncService:
             db.rollback()
             # Compensate: rollback both Cenlar and Fiserv
             self.cenlar_service.update_borrower_profile(
-                user.cenlar_customer_id, prev_cenlar_profile
+                cenlar_customer_id, prev_cenlar_profile
             )
             self.cenlar_service.update_correspondence_preferences(
-                user.cenlar_customer_id, prev_cenlar_pref
+                cenlar_customer_id, prev_cenlar_pref
             )
-            self.fiserv_service.update_customer_profile(
-                user.fiserv_cif, prev_fiserv_profile
-            )
+            self.fiserv_service.update_customer_profile(fiserv_cif, prev_fiserv_profile)
             self.fiserv_service.update_communication_preferences(
-                user.fiserv_cif, prev_fiserv_pref
+                fiserv_cif, prev_fiserv_pref
             )
 
             raise HTTPException(
@@ -181,6 +199,14 @@ class ProfileSyncService:
                 detail=f"A critical error occurred while saving the audit record; all profile changes have been rolled back. Error: {str(e)}",
             )
 
-        # Return updated profile
-        updated_profile = self.fiserv_service.get_customer_profile(user.fiserv_cif)
+        # Return updated profile with sync metadata
+        updated_profile = self.fiserv_service.get_customer_profile(fiserv_cif) or {}
+        updated_profile["metadata"] = {
+            "fiserv_sync": "LIVE_SUCCESS"
+            if live_sync_available
+            else "FALLBACK_SIMULATED",
+            "cenlar_sync": "SIMULATED",
+            "live_sync_available": live_sync_available,
+            "fallback_reason": fallback_reason,
+        }
         return updated_profile

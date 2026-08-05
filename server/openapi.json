@@ -755,6 +755,80 @@
           }
         }
       }
+    },
+    "/partyservice/parties/parties": {
+      "put": {
+        "summary": "Dummy Party Update",
+        "operationId": "dummy_party_update_partyservice_parties_parties_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/epreferenceservice/epreference/ePreferences": {
+      "put": {
+        "summary": "Dummy Epreferences Update",
+        "operationId": "dummy_epreferences_update_epreferenceservice_epreference_ePreferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1244,6 +1318,18 @@
             "type": "string",
             "title": "Status"
           },
+          "live_sync_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Sync Available",
+            "default": false
+          },
           "failure_reason": {
             "anyOf": [
               {
@@ -1315,6 +1401,38 @@
           "sms_notif"
         ],
         "title": "ProfilePreferences"
+      },
+      "ProfileSyncMetadata": {
+        "properties": {
+          "fiserv_sync": {
+            "type": "string",
+            "title": "Fiserv Sync",
+            "default": "LIVE_SUCCESS"
+          },
+          "cenlar_sync": {
+            "type": "string",
+            "title": "Cenlar Sync",
+            "default": "SIMULATED"
+          },
+          "live_sync_available": {
+            "type": "boolean",
+            "title": "Live Sync Available",
+            "default": true
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Reason"
+          }
+        },
+        "type": "object",
+        "title": "ProfileSyncMetadata"
       },
       "ScheduledPaymentRequest": {
         "properties": {
@@ -1491,6 +1609,16 @@
           },
           "preferences": {
             "$ref": "#/components/schemas/ProfilePreferences"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileSyncMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

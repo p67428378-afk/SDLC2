@@ -211,12 +211,7 @@ class FiservMockService(CoreBankingService):
 
 
 class FiservLiveService(FiservMockService):
-    # Short window: avoids re-hitting the live sandbox on every page navigation
-    # (dashboard, summary, accounts, and account-detail views all call get_accounts()).
     _FRESH_TTL = timedelta(seconds=20)
-    # Longer window: if a refresh comes back degraded (fewer accounts than expected)
-    # because of a transient sandbox blip, serve the last known-good snapshot instead
-    # of a partial/empty account list.
     _STALE_TTL = timedelta(minutes=5)
 
     def __init__(self, settings):
@@ -233,9 +228,6 @@ class FiservLiveService(FiservMockService):
 
         self._accounts_cache = None
         self._accounts_cache_at = None
-        # Fiserv's live sandbox has no real funds-movement endpoint, so payments are
-        # simulated: net debit/credit per account, layered on top of whatever the
-        # sandbox reports on each refresh (see _apply_balance_adjustment).
         self._balance_adjustments: Dict[str, float] = {}
 
         self.accounts_to_query = []
@@ -277,7 +269,7 @@ class FiservLiveService(FiservMockService):
         self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
         return self._token
 
-    def _make_api_call(self, url: str, json_body: dict) -> dict:
+    def _make_api_call(self, url: str, json_body: dict, method: str = "POST") -> dict:
         token = self._get_token()
         headers = {
             "Authorization": f"Bearer {token}",
@@ -288,26 +280,33 @@ class FiservLiveService(FiservMockService):
             "Content-Type": "application/json",
         }
 
-        response = httpx.post(url, headers=headers, json=json_body, timeout=10.0)
+        if method.upper() == "PUT":
+            response = httpx.put(url, headers=headers, json=json_body, timeout=10.0)
+        else:
+            response = httpx.post(url, headers=headers, json=json_body, timeout=10.0)
+
         if response.status_code == 401:
             self._token = None
             self._token_expires_at = None
             token = self._get_token()
             headers["Authorization"] = f"Bearer {token}"
-            response = httpx.post(url, headers=headers, json=json_body, timeout=10.0)
+            if method.upper() == "PUT":
+                response = httpx.put(url, headers=headers, json=json_body, timeout=10.0)
+            else:
+                response = httpx.post(
+                    url, headers=headers, json=json_body, timeout=10.0
+                )
 
         response.raise_for_status()
         return response.json()
 
-    def _call_with_retry(self, url: str, json_body: dict, attempts: int = 2) -> dict:
-        # Retries only transport-level failures (timeouts, connection resets), which is
-        # what a flaky cert sandbox typically produces. Business errors (non-zero
-        # StatusCode) and HTTP error responses are not retried here - they're handled
-        # by the caller.
+    def _call_with_retry(
+        self, url: str, json_body: dict, attempts: int = 2, method: str = "POST"
+    ) -> dict:
         last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             try:
-                return self._make_api_call(url, json_body)
+                return self._make_api_call(url, json_body, method=method)
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 last_exc = e
                 if attempt < attempts - 1:
@@ -315,6 +314,185 @@ class FiservLiveService(FiservMockService):
         if last_exc is not None:
             raise last_exc
         raise RuntimeError("_call_with_retry called with attempts <= 0")
+
+    def update_customer_profile(
+        self, cif: str, profile_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        profile = self.profiles.get(cif, {})
+        previous_state = {
+            "address": profile.get("address"),
+            "phone": profile.get("phone"),
+            "email": profile.get("email"),
+        }
+
+        # Update local in-memory profile dictionary first
+        super().update_customer_profile(cif, profile_data)
+
+        url = f"{self.base_url}/partyservice/parties/parties"
+
+        new_address = profile_data.get("address", profile.get("address", ""))
+        new_phone = profile_data.get("phone", profile.get("phone", ""))
+        new_email = profile_data.get("email", profile.get("email", ""))
+
+        body = {
+            "PartyId": cif,
+            "PersonName": {
+                "FirstName": profile.get("first_name", "Jane"),
+                "LastName": profile.get("last_name", "Doe"),
+            },
+            "Addresses": [
+                {
+                    "AddressType": "Primary",
+                    "Line1": new_address,
+                    "City": "Dallas",
+                    "State": "TX",
+                    "PostalCode": "75201",
+                    "CountryCode": "USA",
+                }
+            ],
+            "PhoneNumbers": [
+                {
+                    "PhoneType": "Mobile",
+                    "PhoneNumber": new_phone,
+                }
+            ],
+            "EmailAddresses": [
+                {
+                    "EmailType": "Primary",
+                    "EmailAddress": new_email,
+                }
+            ],
+        }
+
+        try:
+            res_json = self._call_with_retry(url, body, method="PUT")
+            status_info = res_json.get("Status", {})
+            status_code = str(status_info.get("StatusCode", "0"))
+            if status_code != "0":
+                status_desc = status_info.get("StatusDesc", "Business Error")
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": True,
+                "fallback_reason": None,
+            }
+
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            if status_code in (403, 404):
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {status_code}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+            print(f"Fiserv live update_customer_profile error: {str(e)}")
+            raise e
+        except Exception as e:
+            err_str = str(e)
+            if "403" in err_str or "404" in err_str:
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} ({err_str}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+            print(f"Fiserv live update_customer_profile unexpected error: {str(e)}")
+            raise e
+
+    def update_communication_preferences(
+        self, cif: str, preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        profile = self.profiles.get(cif, {})
+        cur_prefs = profile.get("preferences", {})
+        previous_state = cur_prefs.copy()
+
+        # Update local in-memory preferences dictionary first
+        super().update_communication_preferences(cif, preferences)
+
+        url = f"{self.base_url}/epreferenceservice/epreference/ePreferences"
+
+        updated_prefs = profile.get("preferences", {})
+
+        body = {
+            "PartyId": cif,
+            "EPreferences": {
+                "PaperlessDelivery": updated_prefs.get("paperless", True),
+                "EmailAlerts": updated_prefs.get("email_notif", True),
+                "SMSAlerts": updated_prefs.get("sms_notif", False),
+                "MarketingOptIn": updated_prefs.get("marketing", True),
+            },
+        }
+
+        try:
+            res_json = self._call_with_retry(url, body, method="PUT")
+            status_info = res_json.get("Status", {})
+            status_code = str(status_info.get("StatusCode", "0"))
+            if status_code != "0":
+                status_desc = status_info.get("StatusDesc", "Business Error")
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": True,
+                "fallback_reason": None,
+            }
+
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            if status_code in (403, 404):
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {status_code}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+            print(f"Fiserv live update_communication_preferences error: {str(e)}")
+            raise e
+        except Exception as e:
+            err_str = str(e)
+            if "403" in err_str or "404" in err_str:
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} ({err_str}). Falling back to simulated update."
+                )
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": "ENTITLEMENT_DENIED",
+                }
+            print(
+                f"Fiserv live update_communication_preferences unexpected error: {str(e)}"
+            )
+            raise e
 
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
@@ -363,7 +541,6 @@ class FiservLiveService(FiservMockService):
                 elif acct_type == "DDA":
                     api_type = "DDA"
 
-                # Exclude Loan accounts (DDL) in live mode
                 if api_type == "DDL" or acct_type in ("Loan", "DDL"):
                     print(f"Excluding Loan account {acct_id} (DDL) in live mode.")
                     continue
@@ -380,7 +557,6 @@ class FiservLiveService(FiservMockService):
 
                 res_json = self._call_with_retry(url, body)
 
-                # Inspect Status.StatusCode for business errors (HTTP 200 with non-zero StatusCode)
                 status_info = res_json.get("Status", {})
                 status_code = str(status_info.get("StatusCode", "0"))
                 if status_code != "0":
@@ -474,8 +650,6 @@ class FiservLiveService(FiservMockService):
         self._balance_adjustments[account_id] = round(
             self._balance_adjustments.get(account_id, 0.0) + delta, 2
         )
-        # Reflect immediately in whatever is currently cached, so a payment made this
-        # request is visible without waiting for the next live refresh.
         if self._accounts_cache:
             for acc in self._accounts_cache:
                 if acc["id"] == account_id:

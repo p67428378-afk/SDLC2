@@ -434,6 +434,9 @@ def get_profile_history(
             "changed_fields_before": h.changed_fields_before,
             "changed_fields_after": h.changed_fields_after,
             "status": h.status,
+            "live_sync_available": h.live_sync_available
+            if h.live_sync_available is not None
+            else False,
             "failure_reason": h.failure_reason,
             "compensation_applied": h.compensation_applied,
             "compensation_details": h.compensation_details,
@@ -575,4 +578,28 @@ def dummy_secured_accounts(payload: dict = None):
                 "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 0}}]
             }
         }
+    }
+
+
+@app.put("/partyservice/parties/parties")
+def dummy_party_update(payload: dict = None):
+    return {
+        "PartyId": "CIF-982341",
+        "Status": {
+            "StatusCode": 0,
+            "Severity": "Info",
+            "StatusDesc": "Party updated successfully",
+        },
+    }
+
+
+@app.put("/epreferenceservice/epreference/ePreferences")
+def dummy_epreferences_update(payload: dict = None):
+    return {
+        "PartyId": "CIF-982341",
+        "Status": {
+            "StatusCode": 0,
+            "Severity": "Info",
+            "StatusDesc": "ePreferences updated successfully",
+        },
     }

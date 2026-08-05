@@ -87,6 +87,7 @@ class ProfileChangeLog(Base):
     changed_fields_before = Column(JSON, nullable=False)
     changed_fields_after = Column(JSON, nullable=False)
     status = Column(String(50), nullable=False)
+    live_sync_available = Column(Boolean, default=False, nullable=True)
     failure_reason = Column(String(255), nullable=True)
     compensation_applied = Column(Boolean, default=False, nullable=False)
     compensation_details = Column(JSON, nullable=True)
