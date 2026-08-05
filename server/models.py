@@ -80,7 +80,7 @@ class ScheduledPayment(Base):
 
 
 class ProfileChangeLog(Base):
-    __tablename__ = "profile_change_log"
+    __tablename__ = "profile_change_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)

@@ -269,14 +269,15 @@ class FiservLiveService(FiservMockService):
         self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
         return self._token
 
+    def _build_efx_header(self) -> str:
+        return json.dumps({"OrganizationId": self.org_id, "TrnId": str(uuid.uuid4())})
+
     def _make_api_call(self, url: str, json_body: dict, method: str = "POST") -> dict:
         token = self._get_token()
         headers = {
             "Authorization": f"Bearer {token}",
             "accept": "application/json",
-            "EFXHeader": json.dumps(
-                {"OrganizationId": self.org_id, "TrnId": str(uuid.uuid4())}
-            ),
+            "EFXHeader": self._build_efx_header(),
             "Content-Type": "application/json",
         }
 
