@@ -67,17 +67,24 @@ class ProfileSyncService:
 
         fiserv_profile_live = fiserv_profile_res.get("live_sync_available", True)
         fiserv_pref_live = fiserv_pref_res.get("live_sync_available", True)
-        live_sync_available = bool(fiserv_profile_live and fiserv_pref_live)
+
+        # live_sync_available tracks the customer-visible profile fields (address, phone,
+        # email), which are what the Party service actually accepts. Communication
+        # preferences ride on the ePreference service, which the cert sandbox rejects for
+        # updates, so a preference fallback is reported as a partial sync instead of
+        # dragging a genuinely successful profile write down to FALLBACK_SIMULATED.
+        live_sync_available = bool(fiserv_profile_live)
 
         fallback_reason = None
         if not live_sync_available:
             fallback_reason = (
-                fiserv_profile_res.get("fallback_reason")
-                or fiserv_pref_res.get("fallback_reason")
-                or "ENTITLEMENT_DENIED"
+                fiserv_profile_res.get("fallback_reason") or "ENTITLEMENT_DENIED"
             )
 
-        partial_fiserv_sync = fiserv_pref_res.get("partial_fiserv_sync")
+        partial_fiserv_sync = list(fiserv_pref_res.get("partial_fiserv_sync") or [])
+        if not fiserv_pref_live:
+            partial_fiserv_sync.append("preferences")
+        partial_fiserv_sync = partial_fiserv_sync or None
 
         # 3. Sync to Cenlar
         cenlar_profile_res = None
@@ -212,7 +219,7 @@ class ProfileSyncService:
         updated_profile["message"] = (
             "Profile updated successfully."
             if live_sync_available
-            else "Profile updated locally (Fiserv live sync fallback applied due to entitlement constraints)."
+            else "Profile saved. Core banking sync is pending and will be retried."
         )
 
         metadata = {

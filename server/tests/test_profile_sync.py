@@ -4,6 +4,74 @@ from server.tests.test_payments import get_auth_headers
 from server.services.fiserv import FiservLiveService
 
 
+def _fiserv_post_router(party_contacts=None, epref_ident="epref-999"):
+    """
+    Route Fiserv POSTs by URL.
+
+    A Party update is a read-modify-write, so the Party inquiry, the ePreference
+    inquiry and the account inquiry are all POSTs that need different response
+    bodies. Without routing, one of them silently gets the wrong shape.
+    """
+
+    def _post(url, *args, **kwargs):
+        resp = MagicMock()
+        resp.status_code = 200
+        if "partyservice" in url:
+            resp.json.return_value = {
+                "Status": {"StatusCode": "0"},
+                "PartyRec": {
+                    "PersonPartyInfo": {
+                        "PersonData": {
+                            "PersonName": [{"GivenName": "Jane", "FamilyName": "Doe"}],
+                            "Contact": (
+                                party_contacts
+                                if party_contacts is not None
+                                else [
+                                    {
+                                        "PostAddr": {
+                                            "AddressIdent": "2230553",
+                                            "Addr1": "1 Old St",
+                                            "City": "Oldtown",
+                                            "StateProv": "NY",
+                                            "PostalCode": "10001",
+                                            "AddrType": "Primary",
+                                        }
+                                    },
+                                    {
+                                        "Email": {
+                                            "EmailIdent": "1",
+                                            "EmailAddr": "old@example.com",
+                                            "PreferredEmail": True,
+                                        }
+                                    },
+                                ]
+                            ),
+                        }
+                    }
+                },
+            }
+        elif "epreferenceservice" in url:
+            resp.json.return_value = {
+                "Status": {"StatusCode": "0"},
+                "EPreferenceRec": {
+                    "EPreferenceKeys": {"EPreferenceIdent": epref_ident}
+                },
+            }
+        else:
+            # Account inquiry with no PostAddr/NameIdent -> no party discoverable.
+            resp.json.return_value = {"Status": {"StatusCode": "0"}, "AcctRec": {}}
+        return resp
+
+    return _post
+
+
+def _ok_put():
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {"Status": {"StatusCode": 0, "StatusDesc": "Success"}}
+    return resp
+
+
 def test_successful_profile_update_and_sync(client):
     headers = get_auth_headers(client)
 
@@ -184,24 +252,27 @@ def test_profile_update_live_mode_entitlement_fallback(client):
         }
     ]
 
-    with patch.object(profile_sync_service, "fiserv_service", live_service):
-        with patch.object(live_service, "_get_token", return_value="mock-token"):
-            with patch("httpx.put", side_effect=[mock_403, mock_403]):
-                response = client.put("/api/v1/profile", headers=headers, json=payload)
-                assert response.status_code == 200
-                data = response.json()
-                assert data["address"] == payload["address"]
-                assert "metadata" in data
-                assert data["metadata"]["live_sync_available"] is False
-                assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
-                assert data["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
+    with (
+        patch.object(profile_sync_service, "fiserv_service", live_service),
+        patch.object(live_service, "_get_token", return_value="mock-token"),
+        patch("httpx.post", side_effect=_fiserv_post_router()),
+        patch("httpx.put", side_effect=[mock_403, mock_403]),
+    ):
+        response = client.put("/api/v1/profile", headers=headers, json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == payload["address"]
+        assert "metadata" in data
+        assert data["metadata"]["live_sync_available"] is False
+        assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+        assert data["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
 
-                res_hist = client.get("/api/v1/profile/history", headers=headers)
-                assert res_hist.status_code == 200
-                history = res_hist.json()
-                latest = history[0]
-                assert latest["status"] == "FALLBACK_SIMULATED"
-                assert latest["live_sync_available"] is False
+        res_hist = client.get("/api/v1/profile/history", headers=headers)
+        assert res_hist.status_code == 200
+        history = res_hist.json()
+        latest = history[0]
+        assert latest["status"] == "FALLBACK_SIMULATED"
+        assert latest["live_sync_available"] is False
 
 
 def test_profile_update_live_mode_400_bad_request_fallback(client):
@@ -249,27 +320,30 @@ def test_profile_update_live_mode_400_bad_request_fallback(client):
         }
     ]
 
-    with patch.object(profile_sync_service, "fiserv_service", live_service):
-        with patch.object(live_service, "_get_token", return_value="mock-token"):
-            with patch("httpx.put", side_effect=[mock_400, mock_400]):
-                response = client.put("/api/v1/profile", headers=headers, json=payload)
-                assert response.status_code == 200
-                data = response.json()
-                assert data["address"] == payload["address"]
-                assert "metadata" in data
-                assert data["metadata"]["live_sync_available"] is False
-                assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
-                assert data["metadata"]["fallback_reason"] == "BUSINESS_ERROR"
+    with (
+        patch.object(profile_sync_service, "fiserv_service", live_service),
+        patch.object(live_service, "_get_token", return_value="mock-token"),
+        patch("httpx.post", side_effect=_fiserv_post_router()),
+        patch("httpx.put", side_effect=[mock_400, mock_400]),
+    ):
+        response = client.put("/api/v1/profile", headers=headers, json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == payload["address"]
+        assert "metadata" in data
+        assert data["metadata"]["live_sync_available"] is False
+        assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+        assert data["metadata"]["fallback_reason"] == "BUSINESS_ERROR"
 
-                res_hist = client.get("/api/v1/profile/history", headers=headers)
-                assert res_hist.status_code == 200
-                history = res_hist.json()
-                latest = history[0]
-                assert latest["status"] == "FALLBACK_SIMULATED"
-                assert latest["live_sync_available"] is False
+        res_hist = client.get("/api/v1/profile/history", headers=headers)
+        assert res_hist.status_code == 200
+        history = res_hist.json()
+        latest = history[0]
+        assert latest["status"] == "FALLBACK_SIMULATED"
+        assert latest["live_sync_available"] is False
 
 
-def test_profile_update_live_mode_party_id_not_configured_fallback(client):
+def test_profile_update_live_mode_party_id_unresolved_fallback(client):
     headers = get_auth_headers(client)
 
     payload = {
@@ -299,15 +373,22 @@ def test_profile_update_live_mode_party_id_not_configured_fallback(client):
     )
     live_service = FiservLiveService(ungated_settings)
 
-    with patch.object(profile_sync_service, "fiserv_service", live_service):
+    with (
+        patch.object(profile_sync_service, "fiserv_service", live_service),
+        patch.object(live_service, "_get_token", return_value="mock-token"),
+        patch("httpx.post", side_effect=_fiserv_post_router()),
+        patch("httpx.put", return_value=_ok_put()),
+    ):
         response = client.put("/api/v1/profile", headers=headers, json=payload)
         assert response.status_code == 200
         data = response.json()
         assert data["address"] == payload["address"]
         assert "metadata" in data
+        # The profile write is skipped entirely because no PartyId is discoverable,
+        # so it is reported as a fallback rather than being sent and rejected.
         assert data["metadata"]["live_sync_available"] is False
         assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
-        assert data["metadata"]["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
+        assert data["metadata"]["fallback_reason"] == "PARTY_ID_UNRESOLVED"
 
 
 def test_profile_update_live_mode_success(client):
@@ -330,13 +411,6 @@ def test_profile_update_live_mode_success(client):
     mock_party_put.json.return_value = {
         "PartyId": "PARTY-982341",
         "Status": {"StatusCode": 0, "Severity": "Info", "StatusDesc": "Success"},
-    }
-
-    mock_secured_post = MagicMock()
-    mock_secured_post.status_code = 200
-    mock_secured_post.json.return_value = {
-        "Status": {"StatusCode": "0"},
-        "EPreferenceRec": {"EPreferenceKeys": {"EPreferenceIdent": "epref-999"}},
     }
 
     mock_epref_put = MagicMock()
@@ -369,31 +443,31 @@ def test_profile_update_live_mode_success(client):
         }
     ]
 
-    with patch.object(profile_sync_service, "fiserv_service", live_service):
-        with patch.object(live_service, "_get_token", return_value="mock-token"):
-            with patch("httpx.post", return_value=mock_secured_post):
-                with patch("httpx.put", side_effect=[mock_party_put, mock_epref_put]):
-                    response = client.put(
-                        "/api/v1/profile", headers=headers, json=payload
-                    )
-                    assert response.status_code == 200
-                    data = response.json()
-                    assert data["address"] == payload["address"]
-                    assert "metadata" in data
-                    assert data["metadata"]["live_sync_available"] is True
-                    assert data["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
-                    assert data["metadata"]["fallback_reason"] is None
-                    assert data["metadata"]["partial_fiserv_sync"] == [
-                        "sms_notif",
-                        "marketing",
-                    ]
+    with (
+        patch.object(profile_sync_service, "fiserv_service", live_service),
+        patch.object(live_service, "_get_token", return_value="mock-token"),
+        patch("httpx.post", side_effect=_fiserv_post_router()),
+        patch("httpx.put", side_effect=[mock_party_put, mock_epref_put]),
+    ):
+        response = client.put("/api/v1/profile", headers=headers, json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == payload["address"]
+        assert "metadata" in data
+        assert data["metadata"]["live_sync_available"] is True
+        assert data["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
+        assert data["metadata"]["fallback_reason"] is None
+        assert data["metadata"]["partial_fiserv_sync"] == [
+            "sms_notif",
+            "marketing",
+        ]
 
-                    res_hist = client.get("/api/v1/profile/history", headers=headers)
-                    assert res_hist.status_code == 200
-                    history = res_hist.json()
-                    latest = history[0]
-                    assert latest["status"] == "SUCCESS"
-                    assert latest["live_sync_available"] is True
-                    assert latest["compensation_details"] == {
-                        "partial_fiserv_sync": ["sms_notif", "marketing"]
-                    }
+        res_hist = client.get("/api/v1/profile/history", headers=headers)
+        assert res_hist.status_code == 200
+        history = res_hist.json()
+        latest = history[0]
+        assert latest["status"] == "SUCCESS"
+        assert latest["live_sync_available"] is True
+        assert latest["compensation_details"] == {
+            "partial_fiserv_sync": ["sms_notif", "marketing"]
+        }

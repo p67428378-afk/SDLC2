@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -313,6 +314,83 @@ def _extract_epreference_ident(res_json: dict) -> Optional[str]:
     return None
 
 
+def _normalize_phone_for_fiserv(phone: Any) -> Optional[str]:
+    """
+    Render a phone number the way the Party service expects: +<country>-<area>-<rest>,
+    exactly three dash-separated segments.
+
+    Verified against the cert sandbox:
+      "+1-217-5550143"   -> stored verbatim
+      "2175550143"       -> HTTP 400, StatusCode 1090 "Invalid Value"
+      "+1-217-555-0143"  -> accepted but silently mangled to "+1-217-0000555"
+    So anything with the wrong segment count must be reshaped before sending.
+    """
+    if not phone:
+        return None
+
+    digits = re.sub(r"\D", "", str(phone))
+    if not digits:
+        return None
+
+    # Drop a leading US country code so 11-digit input collapses to 10.
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+
+    if len(digits) != 10:
+        return None
+
+    return f"+1-{digits[:3]}-{digits[3:]}"
+
+
+def _extract_party_id_from_account(res_json: dict) -> Optional[str]:
+    """
+    Pull the Premier party (name) identifier out of an account inquiry response.
+
+    Premier exposes it as PostAddr[].NameIdent, which is the numeric key the Party
+    service expects as PartyId. The app's own CIF ("CIF-982341") is NOT a valid
+    PartyId -- Fiserv rejects non-numeric keys with "Name Identification Must be
+    Numeric" -- so the party has to be discovered from the account record instead.
+    """
+    if not isinstance(res_json, dict):
+        return None
+
+    acct_rec = res_json.get("AcctRec")
+    if isinstance(acct_rec, dict):
+        recs = [acct_rec]
+    elif isinstance(acct_rec, list):
+        recs = acct_rec
+    else:
+        return None
+
+    for rec in recs:
+        if not isinstance(rec, dict):
+            continue
+        info = rec.get("DepositAcctInfo") or rec.get("LoanAcctInfo") or {}
+        if not isinstance(info, dict):
+            continue
+
+        post_addrs = info.get("PostAddr", [])
+        if isinstance(post_addrs, dict):
+            post_addrs = [post_addrs]
+        if not isinstance(post_addrs, list):
+            continue
+
+        for post_addr in post_addrs:
+            if not isinstance(post_addr, dict):
+                continue
+            idents = post_addr.get("NameIdent")
+            if isinstance(idents, (str, int)):
+                idents = [idents]
+            if not isinstance(idents, list):
+                continue
+            for ident in idents:
+                candidate = str(ident).strip()
+                if candidate.isdigit():
+                    return candidate
+
+    return None
+
+
 class FiservLiveService(FiservMockService):
     """
     Fiserv Live Integration Service using BankingHub cert sandbox APIs.
@@ -349,6 +427,11 @@ class FiservLiveService(FiservMockService):
         self._profile_cache = None
         self._profile_cache_at = None
         self._balance_adjustments: Dict[str, float] = {}
+
+        # Party id discovered from the account record (see _resolve_party_id).
+        self._resolved_party_id: Optional[str] = None
+        # Outcome of the most recent live profile write, surfaced in GET metadata.
+        self._last_live_sync: Optional[Dict[str, Any]] = None
 
         self.accounts_to_query = []
         if self.demo_accounts:
@@ -435,6 +518,164 @@ class FiservLiveService(FiservMockService):
             raise last_exc
         raise RuntimeError("_call_with_retry called with attempts <= 0")
 
+    def _resolve_party_id(self, cif: str) -> Optional[str]:
+        """
+        Resolve the Fiserv PartyId to update.
+
+        Order of preference:
+          1. FISERV_PARTY_ID, when an operator has pinned one explicitly.
+          2. The NameIdent on the customer's primary (DDA) account record, which is
+             already cached on each account as `raw_source` -- so this normally costs
+             no extra API call.
+
+        Returns None only when neither is available, in which case callers fall back
+        to a simulated update rather than sending a request Fiserv will reject.
+        """
+        if self.party_id:
+            return str(self.party_id)
+
+        if self._resolved_party_id:
+            return self._resolved_party_id
+
+        try:
+            accounts = self.get_accounts(cif)
+        except Exception as e:
+            print(f"[FISERV_PARTY_RESOLVE] Could not load accounts for {cif}: {e}")
+            return None
+
+        # Prefer the primary checking account, then fall back to any account.
+        ordered = [a for a in accounts if a.get("type") == "DDA"] + [
+            a for a in accounts if a.get("type") != "DDA"
+        ]
+        for acct in ordered:
+            candidate = _extract_party_id_from_account(acct.get("raw_source") or {})
+            if candidate:
+                self._resolved_party_id = candidate
+                print(
+                    f"[FISERV_PARTY_RESOLVE] Resolved PartyId {candidate} from account "
+                    f"{acct.get('id')} for CIF {cif}."
+                )
+                return candidate
+
+        print(
+            f"[FISERV_PARTY_RESOLVE] No numeric NameIdent found on any account for CIF {cif}."
+        )
+        return None
+
+    def _fetch_party_contacts(self, party_id: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Read the party's current Contact collection.
+
+        Required before any update: the Party PUT REPLACES the Contact collection
+        rather than merging into it, so writing a partial list silently deletes the
+        customer's other addresses, emails and phone numbers. Returns None when the
+        collection can't be read, which callers must treat as "do not write".
+        """
+        url = f"{self.base_url}/partyservice/parties/parties/secured"
+        body = {"PartySel": {"PartyKeys": {"PartyId": party_id}}}
+
+        res_json = self._call_with_retry(url, body, method="POST")
+        status_info = res_json.get("Status", {})
+        if str(status_info.get("StatusCode", "0")) != "0":
+            print(
+                f"[FISERV_PARTY_READ] PartyId {party_id} inquiry returned StatusCode "
+                f"{status_info.get('StatusCode')}: {status_info.get('StatusDesc')}."
+            )
+            return None
+
+        party_rec = res_json.get("PartyRec")
+        if isinstance(party_rec, list):
+            party_rec = party_rec[0] if party_rec else {}
+        if not isinstance(party_rec, dict):
+            return None
+
+        person_info = party_rec.get("PersonPartyInfo", {})
+        if not isinstance(person_info, dict):
+            return None
+        person_data = person_info.get("PersonData", {})
+        if not isinstance(person_data, dict):
+            return None
+
+        contacts = person_data.get("Contact", [])
+        if isinstance(contacts, dict):
+            contacts = [contacts]
+        if not isinstance(contacts, list):
+            return None
+
+        return [c for c in contacts if isinstance(c, dict)]
+
+    @staticmethod
+    def _merge_contact_updates(
+        contacts: List[Dict[str, Any]],
+        parsed_addr: Dict[str, str],
+        phone: Optional[str],
+        email: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Rebuild the full Contact collection with only the customer-editable fields
+        changed, preserving every existing record and its identifier.
+
+        The identifiers matter: a PostAddr without its AddressIdent is rejected with
+        StatusCode 1020 "Required Element Not Included", and an Email without its
+        EmailIdent is appended as a brand new address instead of updating in place.
+        """
+        merged: List[Dict[str, Any]] = []
+        addr_done = False
+        email_done = False
+        phone_done = False
+
+        for contact in contacts:
+            entry = json.loads(json.dumps(contact))  # deep copy, plain JSON in/out
+
+            if "PostAddr" in entry and not addr_done:
+                post_addr = entry["PostAddr"]
+                if isinstance(post_addr, dict) and post_addr.get("AddressIdent"):
+                    post_addr["Addr1"] = parsed_addr.get("Addr1", "")
+                    post_addr["Addr2"] = ""
+                    post_addr["City"] = parsed_addr.get("City", "")
+                    post_addr["StateProv"] = parsed_addr.get("StateProv", "")
+                    post_addr["PostalCode"] = parsed_addr.get("PostalCode", "")
+                    addr_done = True
+
+            elif "Email" in entry and not email_done and email:
+                email_obj = entry["Email"]
+                if isinstance(email_obj, dict) and email_obj.get("EmailIdent"):
+                    email_obj["EmailAddr"] = email
+                    email_done = True
+
+            elif "PhoneNum" in entry and not phone_done and phone:
+                phone_obj = entry["PhoneNum"]
+                if isinstance(phone_obj, dict):
+                    phone_obj["Phone"] = phone
+                    phone_done = True
+
+            merged.append(entry)
+
+        # The sandbox party may carry no email/phone contact at all; add one so the
+        # customer's new details are still recorded.
+        if email and not email_done:
+            merged.append(
+                {
+                    "Email": {
+                        "EmailType": "Person",
+                        "EmailAddr": email,
+                        "PreferredEmail": True,
+                    }
+                }
+            )
+        if phone and not phone_done:
+            merged.append(
+                {
+                    "PhoneNum": {
+                        "PhoneType": "Mobile",
+                        "Phone": phone,
+                        "PreferredPhone": True,
+                    }
+                }
+            )
+
+        return merged
+
     def _parse_party_response(
         self, res_json: dict, cif: str, party_id: str
     ) -> Dict[str, Any]:
@@ -506,122 +747,44 @@ class FiservLiveService(FiservMockService):
         }
 
     def get_customer_profile(self, cif: str) -> Optional[Dict[str, Any]]:
-        now = datetime.utcnow()
-        if (
-            self._profile_cache is not None
-            and self._profile_cache_at is not None
-            and now - self._profile_cache_at < self._FRESH_TTL
-        ):
-            return self._profile_cache
+        """
+        Return the customer's profile from local state.
 
-        from server.config import settings
+        This deliberately does NOT read the Party service. The cert-sandbox party
+        behind the demo accounts is a different person -- Premier party 3328719 is
+        "HOWARD FEN", while the app's demo customer is Jane Doe -- so mapping live
+        party fields onto the profile would silently replace the customer's identity.
+        It would also add a Party round-trip to every profile page load.
 
-        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
-        if not party_id:
-            mock_profile = super().get_customer_profile(cif)
-            if mock_profile:
-                res = mock_profile.copy()
-                res["metadata"] = {
-                    "fiserv_sync": "FALLBACK_SIMULATED",
-                    "live_sync_available": False,
-                    "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
-                }
-                self._profile_cache = res
-                self._profile_cache_at = now
-                return res
+        Writes still go to Fiserv for real (see update_customer_profile); the outcome
+        of the most recent write is reported in `metadata` so callers can tell whether
+        the last change actually reached the core.
+        """
+        mock_profile = super().get_customer_profile(cif)
+        if not mock_profile:
             return None
 
-        url = f"{self.base_url}/partyservice/parties/parties/secured"
-        body = {"PartySel": {"PartyKeys": {"PartyId": party_id}}}
+        res = mock_profile.copy()
+        last = self._last_live_sync
 
-        try:
-            res_json = self._call_with_retry(url, body, method="POST")
-            status_info = res_json.get("Status", {})
-            status_code = str(status_info.get("StatusCode", "0"))
-            if status_code != "0":
-                status_desc = status_info.get("StatusDesc", "Business Error")
-                if (
-                    status_code in ("401", "403", "404", "1120")
-                    or "entitle" in status_desc.lower()
-                    or "not authorized" in status_desc.lower()
-                    or "permission" in status_desc.lower()
-                ):
-                    fallback_reason = "ENTITLEMENT_DENIED"
-                else:
-                    fallback_reason = "BUSINESS_ERROR"
+        if last is None:
+            # Nothing written yet in this process; report honestly without spending
+            # API calls just to populate a status field.
+            party_known = bool(self.party_id or self._resolved_party_id)
+            res["metadata"] = {
+                "fiserv_sync": "LIVE_READY" if party_known else "NOT_YET_SYNCED",
+                "live_sync_available": party_known,
+                "fallback_reason": None,
+            }
+        else:
+            live_ok = bool(last.get("ok"))
+            res["metadata"] = {
+                "fiserv_sync": "LIVE_SUCCESS" if live_ok else "FALLBACK_SIMULATED",
+                "live_sync_available": live_ok,
+                "fallback_reason": last.get("reason"),
+            }
 
-                mock_profile = super().get_customer_profile(cif)
-                if mock_profile:
-                    res = mock_profile.copy()
-                    res["metadata"] = {
-                        "fiserv_sync": "FALLBACK_SIMULATED",
-                        "live_sync_available": False,
-                        "fallback_reason": fallback_reason,
-                    }
-                    self._profile_cache = res
-                    self._profile_cache_at = now
-                    return res
-                return None
-
-            live_profile = self._parse_party_response(res_json, cif, party_id)
-            self._profile_cache = live_profile
-            self._profile_cache_at = now
-            return live_profile
-
-        except httpx.HTTPStatusError as e:
-            code = e.response.status_code if e.response is not None else 500
-            code_str = str(code)
-            if code in (401, 403, 404):
-                fallback_reason = "ENTITLEMENT_DENIED"
-            elif 400 <= code < 500:
-                fallback_reason = "BUSINESS_ERROR"
-            else:
-                fallback_reason = "UPSTREAM_ERROR"
-
-            print(
-                f"[FISERV_PROFILE_FALLBACK] Organization ID {self.org_id} HTTP error on {url} (HTTP {code_str}). Reason: {fallback_reason}. Falling back to mock profile."
-            )
-            mock_profile = super().get_customer_profile(cif)
-            if mock_profile:
-                res = mock_profile.copy()
-                res["metadata"] = {
-                    "fiserv_sync": "FALLBACK_SIMULATED",
-                    "live_sync_available": False,
-                    "fallback_reason": fallback_reason,
-                }
-                self._profile_cache = res
-                self._profile_cache_at = now
-                return res
-            return None
-        except (httpx.TimeoutException, httpx.ConnectError):
-            if (
-                self._profile_cache is not None
-                and self._profile_cache_at is not None
-                and now - self._profile_cache_at < self._STALE_TTL
-            ):
-                return self._profile_cache
-
-            mock_profile = super().get_customer_profile(cif)
-            if mock_profile:
-                res = mock_profile.copy()
-                res["metadata"] = {
-                    "fiserv_sync": "FALLBACK_SIMULATED",
-                    "live_sync_available": False,
-                    "fallback_reason": "NETWORK_ERROR",
-                }
-                return res
-            return None
-        except Exception:
-            mock_profile = super().get_customer_profile(cif)
-            if mock_profile:
-                res = mock_profile.copy()
-                res["metadata"] = {
-                    "fiserv_sync": "FALLBACK_SIMULATED",
-                    "live_sync_available": False,
-                    "fallback_reason": "UPSTREAM_ERROR",
-                }
-                return res
-            return None
+        return res
 
     def update_customer_profile(
         self, cif: str, profile_data: Dict[str, Any]
@@ -633,20 +796,20 @@ class FiservLiveService(FiservMockService):
             "email": profile.get("email"),
         }
 
-        from server.config import settings
-
-        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
+        party_id = self._resolve_party_id(cif)
         if not party_id:
             print(
-                f"[FISERV_PARTY_GATED] Organization ID {self.org_id} - FISERV_PARTY_ID is unset. Skipping live HTTP call."
+                f"[FISERV_PARTY_GATED] Organization ID {self.org_id} - no PartyId could be "
+                f"resolved for CIF {cif}. Skipping live HTTP call."
             )
             super().update_customer_profile(cif, profile_data)
             self._profile_cache = None
+            self._last_live_sync = {"ok": False, "reason": "PARTY_ID_UNRESOLVED"}
             return {
                 "success": True,
                 "previous_state": previous_state,
                 "live_sync_available": False,
-                "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
+                "fallback_reason": "PARTY_ID_UNRESOLVED",
             }
 
         url = f"{self.base_url}/partyservice/parties/parties"
@@ -654,56 +817,49 @@ class FiservLiveService(FiservMockService):
         raw_address = profile_data.get("address", profile.get("address", ""))
         parsed_addr = _parse_address(raw_address)
 
-        new_phone = profile_data.get("phone", profile.get("phone", ""))
+        new_phone = _normalize_phone_for_fiserv(
+            profile_data.get("phone", profile.get("phone", ""))
+        )
         new_email = profile_data.get("email", profile.get("email", ""))
 
+        # Read the current contacts before writing. The PUT replaces the Contact
+        # collection wholesale, so we must send every existing record back with its
+        # identifier intact -- otherwise the customer's other addresses and emails are
+        # deleted as a side effect of changing one field.
+        try:
+            existing_contacts = self._fetch_party_contacts(party_id)
+        except Exception as e:
+            print(
+                f"[FISERV_PARTY_READ] Could not read contacts for PartyId {party_id}: {e}. "
+                f"Falling back to simulated update rather than risking a partial write."
+            )
+            existing_contacts = None
+
+        if existing_contacts is None:
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
+            self._last_live_sync = {"ok": False, "reason": "PARTY_READ_FAILED"}
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "PARTY_READ_FAILED",
+            }
+
+        contacts = self._merge_contact_updates(
+            existing_contacts, parsed_addr, new_phone, new_email
+        )
+
+        # PartyKeys + Contact only. Including OriginatingBranch / ResponsibleBranch /
+        # ResidenceCode or PersonName makes Premier reject the whole request with
+        # StatusCode 1020 "Required Element Not Included" / ServerStatusCode 103
+        # "Invalid Branch Region" -- reproduced with both the hardcoded branch "1" and
+        # the party's own branch "2". Name is not user-editable here, so omitting it
+        # costs nothing.
         body = {
             "OvrdAutoAckInd": "true",
             "PartyKeys": {"PartyId": party_id},
-            "PersonPartyInfo": {
-                "OriginatingBranch": "1",
-                "ResponsibleBranch": "1",
-                "ResidenceCode": "3",
-                "PersonData": {
-                    "PersonName": [
-                        {
-                            "NameType": "Primary",
-                            "FamilyName": profile.get("last_name", "Doe"),
-                            "GivenName": profile.get("first_name", "Jane"),
-                            "NameFormat": "None",
-                        }
-                    ],
-                    "Contact": [
-                        {
-                            "PostAddr": {
-                                "Addr1": parsed_addr["Addr1"],
-                                "City": parsed_addr["City"],
-                                "StateProv": parsed_addr["StateProv"],
-                                "PostalCode": parsed_addr["PostalCode"],
-                                "CountryCode": {
-                                    "CountryCodeSource": "SPCountryCode",
-                                    "CountryCodeValue": "10",
-                                },
-                                "AddrType": "Primary",
-                            }
-                        },
-                        {
-                            "Email": {
-                                "EmailType": "Person",
-                                "EmailAddr": new_email,
-                                "PreferredEmail": True,
-                            }
-                        },
-                        {
-                            "PhoneNum": {
-                                "PhoneType": "Mobile",
-                                "Phone": new_phone,
-                                "PreferredPhone": True,
-                            }
-                        },
-                    ],
-                },
-            },
+            "PersonPartyInfo": {"PersonData": {"Contact": contacts}},
         }
 
         try:
@@ -727,6 +883,7 @@ class FiservLiveService(FiservMockService):
                 )
                 super().update_customer_profile(cif, profile_data)
                 self._profile_cache = None
+                self._last_live_sync = {"ok": False, "reason": fallback_reason}
                 return {
                     "success": True,
                     "previous_state": previous_state,
@@ -734,8 +891,13 @@ class FiservLiveService(FiservMockService):
                     "fallback_reason": fallback_reason,
                 }
 
+            print(
+                f"[FISERV_PARTY_LIVE_OK] Organization ID {self.org_id} updated PartyId "
+                f"{party_id} on {url} (StatusCode 0)."
+            )
             super().update_customer_profile(cif, profile_data)
             self._profile_cache = None
+            self._last_live_sync = {"ok": True, "reason": None}
 
             return {
                 "success": True,
@@ -759,6 +921,7 @@ class FiservLiveService(FiservMockService):
             )
             super().update_customer_profile(cif, profile_data)
             self._profile_cache = None
+            self._last_live_sync = {"ok": False, "reason": fallback_reason}
             return {
                 "success": True,
                 "previous_state": previous_state,
@@ -771,6 +934,7 @@ class FiservLiveService(FiservMockService):
             )
             super().update_customer_profile(cif, profile_data)
             self._profile_cache = None
+            self._last_live_sync = {"ok": False, "reason": "NETWORK_ERROR"}
             return {
                 "success": True,
                 "previous_state": previous_state,
@@ -783,6 +947,7 @@ class FiservLiveService(FiservMockService):
             )
             super().update_customer_profile(cif, profile_data)
             self._profile_cache = None
+            self._last_live_sync = {"ok": False, "reason": "UPSTREAM_ERROR"}
             return {
                 "success": True,
                 "previous_state": previous_state,
@@ -797,21 +962,9 @@ class FiservLiveService(FiservMockService):
         cur_prefs = profile.get("preferences", {})
         previous_state = cur_prefs.copy()
 
-        from server.config import settings
-
-        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
-        if not party_id:
-            print(
-                f"[FISERV_PARTY_GATED] Organization ID {self.org_id} - FISERV_PARTY_ID is unset. Skipping live HTTP call."
-            )
-            super().update_communication_preferences(cif, preferences)
-            self._profile_cache = None
-            return {
-                "success": True,
-                "previous_state": previous_state,
-                "live_sync_available": False,
-                "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
-            }
+        # No PartyId gate here: the ePreference service is keyed by account
+        # (EPreferenceSel.AcctKeys), not by party, so preferences can sync even when no
+        # PartyId is resolvable.
 
         # a) Find customer's DDA checking account ID
         accounts = self.get_accounts(cif)

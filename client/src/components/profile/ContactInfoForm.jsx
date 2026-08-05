@@ -88,8 +88,10 @@ export default function ContactInfoForm({ profile, onSaveSuccess }) {
         },
       };
 
-      await onSaveSuccess(payload);
-      setSuccessMessage("Profile updated successfully");
+      const saved = await onSaveSuccess(payload);
+      // Prefer the backend's message: it distinguishes a full core-banking sync from a
+      // locally-saved fallback, which a hardcoded string would paper over.
+      setSuccessMessage(saved?.message || "Profile updated successfully");
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err) {
       const msg =

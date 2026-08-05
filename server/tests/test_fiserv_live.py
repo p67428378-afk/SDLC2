@@ -636,10 +636,59 @@ def test_factory_pattern():
 # --- Profile Update Live Tests ---
 
 
+def _mock_party_read_response(contacts=None):
+    """
+    Stand-in for the Party inquiry that now precedes every Party update.
+
+    The update is a read-modify-write: the PUT replaces the whole Contact collection,
+    so the service must read the existing records (and their identifiers) first.
+    """
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "PartyRec": {
+            "PersonPartyInfo": {
+                "PersonData": {
+                    "PersonName": [{"GivenName": "Jane", "FamilyName": "Doe"}],
+                    "Contact": (
+                        contacts
+                        if contacts is not None
+                        else [
+                            {
+                                "PostAddr": {
+                                    "AddressIdent": "2230553",
+                                    "AddrUse": "Business",
+                                    "AddrType": "Primary",
+                                    "Addr1": "1 Old St",
+                                    "City": "Oldtown",
+                                    "StateProv": "NY",
+                                    "PostalCode": "10001",
+                                }
+                            },
+                            {
+                                "Email": {
+                                    "EmailIdent": "1",
+                                    "EmailType": "Person",
+                                    "EmailAddr": "old@example.com",
+                                    "PreferredEmail": True,
+                                }
+                            },
+                        ]
+                    ),
+                }
+            }
+        },
+    }
+    return resp
+
+
 @patch("httpx.post")
 def test_update_customer_profile_live_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
+
+    mock_post.return_value = _mock_party_read_response()
 
     mock_put_resp = MagicMock()
     mock_put_resp.status_code = 200
@@ -676,28 +725,34 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
         body_called = mock_put.call_args.kwargs["json"]
         assert body_called["OvrdAutoAckInd"] == "true"
         assert body_called["PartyKeys"]["PartyId"] == "PARTY-982341"
-        assert body_called["PersonPartyInfo"]["OriginatingBranch"] == "1"
-        assert body_called["PersonPartyInfo"]["ResponsibleBranch"] == "1"
-        assert body_called["PersonPartyInfo"]["ResidenceCode"] == "3"
-        assert (
-            body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["GivenName"]
-            == "Jane"
-        )
-        assert (
-            body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["FamilyName"]
-            == "Doe"
-        )
-        contacts = body_called["PersonPartyInfo"]["PersonData"]["Contact"]
+
+        # Branch/residence/name must NOT be sent: Premier rejects the whole request
+        # with StatusCode 1020 / "Invalid Branch Region" when they are present.
+        person_info = body_called["PersonPartyInfo"]
+        assert "OriginatingBranch" not in person_info
+        assert "ResponsibleBranch" not in person_info
+        assert "ResidenceCode" not in person_info
+        assert "PersonName" not in person_info["PersonData"]
+
+        contacts = person_info["PersonData"]["Contact"]
+        # Existing address is updated in place, keeping its AddressIdent (required).
+        assert contacts[0]["PostAddr"]["AddressIdent"] == "2230553"
         assert contacts[0]["PostAddr"]["Addr1"] == "789 Main St"
         assert contacts[0]["PostAddr"]["City"] == "Dallas"
         assert contacts[0]["PostAddr"]["StateProv"] == "TX"
         assert contacts[0]["PostAddr"]["PostalCode"] == "75201"
+        # Existing email is updated in place, keeping its EmailIdent, so Premier does
+        # not append a duplicate address on every save.
+        assert contacts[1]["Email"]["EmailIdent"] == "1"
         assert contacts[1]["Email"]["EmailAddr"] == "jane.new@example.com"
-        assert contacts[2]["PhoneNum"]["Phone"] == "1-555-123-4567"
+        # The party had no phone contact, so one is added -- normalised to the only
+        # format Premier accepts: +<country>-<area>-<rest>.
+        assert contacts[2]["PhoneNum"]["Phone"] == "+1-555-1234567"
 
 
 @patch("httpx.post")
-def test_update_customer_profile_party_id_not_configured(mock_post):
+def test_update_customer_profile_party_id_unresolvable(mock_post):
+    """With no FISERV_PARTY_ID and no discoverable NameIdent, never send a write."""
     ungated_settings = Settings(
         FISERV_MODE="live",
         FISERV_API_KEY="test-key",
@@ -710,6 +765,15 @@ def test_update_customer_profile_party_id_not_configured(mock_post):
     )
     service = FiservLiveService(ungated_settings)
 
+    # Account inquiry carries no PostAddr/NameIdent, so no party can be discovered.
+    empty_acct = MagicMock()
+    empty_acct.status_code = 200
+    empty_acct.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {"DepositAcctInfo": {"AcctBal": []}},
+    }
+    mock_post.return_value = empty_acct
+
     with patch("httpx.put") as mock_put:
         res = service.update_customer_profile(
             "CIF-982341",
@@ -721,7 +785,146 @@ def test_update_customer_profile_party_id_not_configured(mock_post):
         )
         assert res["success"] is True
         assert res["live_sync_available"] is False
-        assert res["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
+        assert res["fallback_reason"] == "PARTY_ID_UNRESOLVED"
+        mock_put.assert_not_called()
+
+
+@patch("httpx.post")
+def test_party_id_discovered_from_account_name_ident(mock_post, live_settings):
+    """The PartyId is derived from the account's NameIdent when none is configured."""
+    ungated = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="test-key",
+        FISERV_API_SECRET="test-secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID=None,
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    service = FiservLiveService(ungated)
+    service._token = "mock-token"
+
+    acct = MagicMock()
+    acct.status_code = 200
+    acct.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.0}}],
+                "PostAddr": [
+                    {"AddrUse": "Mailing", "NameIdent": ["3328719"]},
+                ],
+            }
+        },
+    }
+    mock_post.return_value = acct
+
+    assert service._resolve_party_id("CIF-982341") == "3328719"
+    # Cached, so a second call needs no further discovery.
+    assert service._resolved_party_id == "3328719"
+
+
+def test_normalize_phone_for_fiserv():
+    """Premier only accepts +<country>-<area>-<rest>; everything else 400s or mangles."""
+    from server.services.fiserv import _normalize_phone_for_fiserv
+
+    assert _normalize_phone_for_fiserv("217-555-0143") == "+1-217-5550143"
+    assert _normalize_phone_for_fiserv("(217) 555-0143") == "+1-217-5550143"
+    assert _normalize_phone_for_fiserv("1-800-555-0199") == "+1-800-5550199"
+    assert _normalize_phone_for_fiserv("+1-217-5550143") == "+1-217-5550143"
+    assert _normalize_phone_for_fiserv("") is None
+    assert _normalize_phone_for_fiserv(None) is None
+    assert _normalize_phone_for_fiserv("12345") is None
+
+
+def test_merge_contact_updates_preserves_other_records():
+    """
+    The Party PUT replaces the Contact collection, so unrelated records must survive a
+    single-field edit -- otherwise updating an address deletes the customer's other
+    addresses and emails.
+    """
+    existing = [
+        {
+            "PostAddr": {
+                "AddressIdent": "1",
+                "Addr1": "1 First St",
+                "City": "Alpha",
+                "StateProv": "NY",
+                "PostalCode": "10001",
+                "AddrType": "Primary",
+            }
+        },
+        {
+            "PostAddr": {
+                "AddressIdent": "2",
+                "Addr1": "2 Second St",
+                "City": "Beta",
+                "StateProv": "NJ",
+                "PostalCode": "07001",
+                "AddrType": "Secondary",
+            }
+        },
+        {"Email": {"EmailIdent": "1", "EmailAddr": "keep@example.com"}},
+    ]
+
+    merged = FiservLiveService._merge_contact_updates(
+        existing,
+        {
+            "Addr1": "9 New Rd",
+            "City": "Gamma",
+            "StateProv": "TX",
+            "PostalCode": "75201",
+        },
+        "+1-555-1234567",
+        "new@example.com",
+    )
+
+    # Only the first address changed; the second is untouched.
+    assert merged[0]["PostAddr"]["AddressIdent"] == "1"
+    assert merged[0]["PostAddr"]["Addr1"] == "9 New Rd"
+    assert merged[0]["PostAddr"]["City"] == "Gamma"
+    assert merged[1]["PostAddr"]["AddressIdent"] == "2"
+    assert merged[1]["PostAddr"]["Addr1"] == "2 Second St"
+    assert merged[1]["PostAddr"]["City"] == "Beta"
+    # Email updated in place, identifier kept.
+    assert merged[2]["Email"]["EmailIdent"] == "1"
+    assert merged[2]["Email"]["EmailAddr"] == "new@example.com"
+    # No phone existed, so one is appended.
+    assert merged[3]["PhoneNum"]["Phone"] == "+1-555-1234567"
+    # Nothing was dropped.
+    assert len(merged) == 4
+    # The caller's input is not mutated.
+    assert existing[0]["PostAddr"]["Addr1"] == "1 First St"
+
+
+@patch("httpx.post")
+def test_update_customer_profile_aborts_when_party_read_fails(
+    mock_post, live_settings
+):
+    """A failed contact read must not trigger a partial (destructive) write."""
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    bad_read = MagicMock()
+    bad_read.status_code = 200
+    bad_read.json.return_value = {
+        "Status": {"StatusCode": "1120", "StatusDesc": "Not Entitled"}
+    }
+    mock_post.return_value = bad_read
+
+    with patch("httpx.put") as mock_put:
+        res = service.update_customer_profile(
+            "CIF-982341",
+            {
+                "address": "789 Main St, Dallas, TX 75201",
+                "phone": "555-123-4567",
+                "email": "jane.new@example.com",
+            },
+        )
+        assert res["success"] is True
+        assert res["live_sync_available"] is False
+        assert res["fallback_reason"] == "PARTY_READ_FAILED"
         mock_put.assert_not_called()
 
 
@@ -729,6 +932,8 @@ def test_update_customer_profile_party_id_not_configured(mock_post):
 def test_update_customer_profile_400_bad_request_fallback(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
+
+    mock_post.return_value = _mock_party_read_response()
 
     mock_400 = MagicMock()
     mock_400.status_code = 400
@@ -756,6 +961,8 @@ def test_update_customer_profile_500_server_error_fallback(mock_post, live_setti
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
 
+    mock_post.return_value = _mock_party_read_response()
+
     mock_500 = MagicMock()
     mock_500.status_code = 500
     mock_500.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -778,53 +985,57 @@ def test_update_customer_profile_500_server_error_fallback(mock_post, live_setti
 
 
 @patch("httpx.post")
-def test_get_customer_profile_live_success(mock_post, live_settings):
+@patch("httpx.put")
+def test_get_customer_profile_reads_locally_without_api_calls(
+    mock_put, mock_post, live_settings
+):
+    """
+    Reads must not hit the Party service. The cert-sandbox party behind the demo
+    accounts is a different person (HOWARD FEN), so mapping live party fields onto the
+    profile would replace the customer's identity -- and it would put a Party
+    round-trip on every profile page load.
+    """
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
 
-    mock_party_resp = MagicMock()
-    mock_party_resp.status_code = 200
-    mock_party_resp.json.return_value = {
-        "Status": {"StatusCode": "0"},
-        "PartyRec": {
-            "PersonPartyInfo": {
-                "PersonData": {
-                    "PersonName": [{"GivenName": "Jane", "FamilyName": "Doe"}],
-                    "Contact": [
-                        {
-                            "PostAddr": {
-                                "Addr1": "100 Live Ave",
-                                "City": "Austin",
-                                "StateProv": "TX",
-                                "PostalCode": "78701",
-                            }
-                        },
-                        {"Email": {"EmailAddr": "jane.live@example.com"}},
-                        {"PhoneNum": {"Phone": "1-512-555-0100"}},
-                    ],
-                }
-            }
-        },
-    }
-
-    mock_post.return_value = mock_party_resp
-
     profile = service.get_customer_profile("CIF-982341")
+
     assert profile is not None
     assert profile["cif"] == "CIF-982341"
-    assert profile["email"] == "jane.live@example.com"
-    assert profile["phone"] == "1-512-555-0100"
+    assert profile["first_name"] == "Jane"
+    assert profile["last_name"] == "Doe"
     assert profile["relationship_manager"] == "Robert Vance"
-    assert profile["metadata"]["live_sync_available"] is True
-    assert profile["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
-
-    # Dedicated profile cache check
-    assert service._profile_cache == profile
-    assert service._profile_cache_at is not None
+    mock_post.assert_not_called()
+    mock_put.assert_not_called()
 
 
 @patch("httpx.post")
-def test_get_customer_profile_party_id_not_configured(mock_post):
+def test_get_customer_profile_reports_last_live_sync_outcome(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    # Before any write, nothing has been synced yet.
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile["metadata"]["live_sync_available"] is True
+    assert profile["metadata"]["fiserv_sync"] == "LIVE_READY"
+
+    # After a successful live write.
+    service._last_live_sync = {"ok": True, "reason": None}
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
+    assert profile["metadata"]["live_sync_available"] is True
+    assert profile["metadata"]["fallback_reason"] is None
+
+    # After a write that fell back.
+    service._last_live_sync = {"ok": False, "reason": "BUSINESS_ERROR"}
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+    assert profile["metadata"]["live_sync_available"] is False
+    assert profile["metadata"]["fallback_reason"] == "BUSINESS_ERROR"
+
+
+@patch("httpx.post")
+def test_get_customer_profile_no_party_id_reports_not_yet_synced(mock_post):
     ungated_settings = Settings(
         FISERV_MODE="live",
         FISERV_API_KEY="test-key",
@@ -841,27 +1052,9 @@ def test_get_customer_profile_party_id_not_configured(mock_post):
     assert profile is not None
     assert profile["cif"] == "CIF-982341"
     assert profile["metadata"]["live_sync_available"] is False
-    assert profile["metadata"]["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
-
-
-@patch("httpx.post")
-def test_get_customer_profile_4xx_fallback(mock_post, live_settings):
-    service = FiservLiveService(live_settings)
-    service._token = "mock-token"
-
-    mock_404 = MagicMock()
-    mock_404.status_code = 404
-    mock_404.raise_for_status.side_effect = httpx.HTTPStatusError(
-        "Not Found", request=MagicMock(), response=mock_404
-    )
-
-    mock_post.return_value = mock_404
-
-    profile = service.get_customer_profile("CIF-982341")
-    assert profile is not None
-    assert profile["cif"] == "CIF-982341"
-    assert profile["metadata"]["live_sync_available"] is False
-    assert profile["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
+    assert profile["metadata"]["fiserv_sync"] == "NOT_YET_SYNCED"
+    # No account discovery is triggered just to populate a status field.
+    mock_post.assert_not_called()
 
 
 @patch("httpx.post")
@@ -1011,6 +1204,8 @@ def test_update_customer_profile_entitlement_403_fallback(mock_post, live_settin
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
 
+    mock_post.return_value = _mock_party_read_response()
+
     mock_403 = MagicMock()
     mock_403.status_code = 403
     mock_403.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -1036,6 +1231,8 @@ def test_update_customer_profile_entitlement_403_fallback(mock_post, live_settin
 def test_update_customer_profile_business_error_fallback(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
+
+    mock_post.return_value = _mock_party_read_response()
 
     mock_biz_err = MagicMock()
     mock_biz_err.status_code = 200
@@ -1068,6 +1265,8 @@ def test_update_customer_profile_generic_business_error_fallback(
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
 
+    mock_post.return_value = _mock_party_read_response()
+
     mock_biz_err = MagicMock()
     mock_biz_err.status_code = 200
     mock_biz_err.json.return_value = {
@@ -1096,6 +1295,8 @@ def test_update_customer_profile_generic_business_error_fallback(
 def test_update_customer_profile_transient_retry(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
+
+    mock_post.return_value = _mock_party_read_response()
 
     mock_put_success = MagicMock()
     mock_put_success.status_code = 200

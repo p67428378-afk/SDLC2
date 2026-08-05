@@ -6,6 +6,28 @@ import CommunicationPreferencesForm from "../components/profile/CommunicationPre
 import SecuritySettingsPlaceholder from "../components/profile/SecuritySettingsPlaceholder";
 import { profileService } from "../services/profileService";
 
+// A change log row is only a failure when the change was actually rejected. A
+// FALLBACK_SIMULATED row means the change WAS saved -- it just didn't reach the core
+// banking system -- so rendering it in the error style told customers their successful
+// update had failed.
+const getProfileLogOutcome = (status) => {
+  if (status === "SUCCESS") return "success";
+  if (status === "FAILED") return "failed";
+  return "simulated";
+};
+
+const PROFILE_LOG_STYLES = {
+  success: "bg-primary/10 text-primary",
+  simulated: "bg-warning/10 text-warning",
+  failed: "bg-error/10 text-error",
+};
+
+const PROFILE_LOG_LABELS = {
+  success: "SUCCESS",
+  simulated: "SAVED",
+  failed: "FAILED",
+};
+
 export default function ProfileSettingsPage() {
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
@@ -309,26 +331,31 @@ export default function ProfileSettingsPage() {
                             <td className="py-3 whitespace-nowrap">
                               <span
                                 className={`px-2.5 py-1 rounded-full font-label-sm text-xs ${
-                                  log.status === "SUCCESS"
-                                    ? "bg-primary/10 text-primary"
-                                    : "bg-error/10 text-error"
+                                  PROFILE_LOG_STYLES[
+                                    getProfileLogOutcome(log.status)
+                                  ]
                                 }`}
                               >
-                                {log.status}
+                                {PROFILE_LOG_LABELS[
+                                  getProfileLogOutcome(log.status)
+                                ] || log.status}
                               </span>
                             </td>
                             <td className="py-3">
-                              {log.status === "SUCCESS" ? (
+                              {getProfileLogOutcome(log.status) === "failed" ? (
+                                <span className="text-error font-medium">
+                                  {log.failure_reason || "Sync failed"}
+                                  {log.compensation_applied && " (Rolled back)"}
+                                </span>
+                              ) : (
                                 <span className="text-text-secondary">
                                   Updated:{" "}
                                   {Object.keys(
                                     log.changed_fields_after || {},
                                   ).join(", ")}
-                                </span>
-                              ) : (
-                                <span className="text-error font-medium">
-                                  {log.failure_reason || "Sync failed"}
-                                  {log.compensation_applied && " (Rolled back)"}
+                                  {getProfileLogOutcome(log.status) ===
+                                    "simulated" &&
+                                    " · saved locally, core banking sync pending"}
                                 </span>
                               )}
                             </td>
