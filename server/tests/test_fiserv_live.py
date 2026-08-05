@@ -20,6 +20,7 @@ def live_settings():
         FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
         FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
         FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID="PARTY-982341",
         FISERV_DEMO_ACCOUNTS="5041733:DDA,302034131:Savings,290001702:CD",
     )
 
@@ -33,6 +34,7 @@ def test_live_service_init(live_settings):
     )
     assert service.base_url == "https://bankinghub-cert.fiservapis.com/banking/efx/v1"
     assert service.org_id == "999990301"
+    assert service.party_id == "PARTY-982341"
     assert len(service.accounts_to_query) == 3
     assert service.accounts_to_query[0] == {"id": "5041733", "type": "DDA"}
     assert service.accounts_to_query[1] == {"id": "302034131", "type": "Savings"}
@@ -228,6 +230,7 @@ def test_get_accounts_loan_type_exclusion(mock_post, live_settings):
         FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
         FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
         FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID="PARTY-982341",
         FISERV_DEMO_ACCOUNTS="5041733:DDA,111222:Loan,333444:DDL",
     )
     service = FiservLiveService(settings_with_loan)
@@ -641,7 +644,7 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
     mock_put_resp = MagicMock()
     mock_put_resp.status_code = 200
     mock_put_resp.json.return_value = {
-        "PartyId": "CIF-982341",
+        "PartyId": "PARTY-982341",
         "Status": {
             "StatusCode": 0,
             "Severity": "Info",
@@ -672,7 +675,7 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
 
         body_called = mock_put.call_args.kwargs["json"]
         assert body_called["OvrdAutoAckInd"] == "true"
-        assert body_called["PartyKeys"]["PartyId"] == "CIF-982341"
+        assert body_called["PartyKeys"]["PartyId"] == "PARTY-982341"
         assert (
             body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["GivenName"]
             == "Jane"
@@ -688,6 +691,178 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
         assert contacts[0]["PostAddr"]["PostalCode"] == "75201"
         assert contacts[1]["Email"]["EmailAddr"] == "jane.new@example.com"
         assert contacts[2]["PhoneNum"]["Phone"] == "1-555-123-4567"
+
+
+@patch("httpx.post")
+def test_update_customer_profile_party_id_not_configured(mock_post):
+    ungated_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="test-key",
+        FISERV_API_SECRET="test-secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID=None,
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    service = FiservLiveService(ungated_settings)
+
+    with patch("httpx.put") as mock_put:
+        res = service.update_customer_profile(
+            "CIF-982341",
+            {
+                "address": "789 Main St, Dallas, TX 75201",
+                "phone": "1-555-123-4567",
+                "email": "jane.new@example.com",
+            },
+        )
+        assert res["success"] is True
+        assert res["live_sync_available"] is False
+        assert res["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
+        mock_put.assert_not_called()
+
+
+@patch("httpx.post")
+def test_update_customer_profile_400_bad_request_fallback(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    mock_400 = MagicMock()
+    mock_400.status_code = 400
+    mock_400.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Bad Request", request=MagicMock(), response=mock_400
+    )
+
+    with patch("httpx.put", return_value=mock_400):
+        res = service.update_customer_profile(
+            "CIF-982341",
+            {
+                "address": "123 Main St, New York, NY 10001",
+                "phone": "1-800-555-0199",
+                "email": "test@example.com",
+            },
+        )
+
+        assert res["success"] is True
+        assert res["live_sync_available"] is False
+        assert res["fallback_reason"] == "CLIENT_ERROR_4XX"
+
+
+@patch("httpx.post")
+def test_update_customer_profile_state_mutation_ordering_on_error(
+    mock_post, live_settings
+):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    initial_phone = service.profiles["CIF-982341"]["phone"]
+
+    mock_500 = MagicMock()
+    mock_500.status_code = 500
+    mock_500.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Internal Server Error", request=MagicMock(), response=mock_500
+    )
+
+    with patch("httpx.put", return_value=mock_500):
+        with pytest.raises(httpx.HTTPStatusError):
+            service.update_customer_profile(
+                "CIF-982341",
+                {
+                    "address": "123 Main St, New York, NY 10001",
+                    "phone": "1-999-999-9999",
+                    "email": "test@example.com",
+                },
+            )
+
+    # Local state MUST NOT have mutated on a path that raises an exception!
+    assert service.profiles["CIF-982341"]["phone"] == initial_phone
+
+
+@patch("httpx.post")
+def test_get_customer_profile_live_success(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    mock_party_resp = MagicMock()
+    mock_party_resp.status_code = 200
+    mock_party_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "PartyRec": {
+            "PersonPartyInfo": {
+                "PersonData": {
+                    "PersonName": [{"GivenName": "Jane", "FamilyName": "Doe"}],
+                    "Contact": [
+                        {
+                            "PostAddr": {
+                                "Addr1": "100 Live Ave",
+                                "City": "Austin",
+                                "StateProv": "TX",
+                                "PostalCode": "78701",
+                            }
+                        },
+                        {"Email": {"EmailAddr": "jane.live@example.com"}},
+                        {"PhoneNum": {"Phone": "1-512-555-0100"}},
+                    ],
+                }
+            }
+        },
+    }
+
+    mock_post.return_value = mock_party_resp
+
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile is not None
+    assert profile["cif"] == "CIF-982341"
+    assert profile["email"] == "jane.live@example.com"
+    assert profile["phone"] == "1-512-555-0100"
+    assert profile["relationship_manager"] == "Robert Vance"
+    assert profile["metadata"]["live_sync_available"] is True
+    assert profile["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
+
+    # Dedicated profile cache check
+    assert service._profile_cache == profile
+    assert service._profile_cache_at is not None
+
+
+@patch("httpx.post")
+def test_get_customer_profile_party_id_not_configured(mock_post):
+    ungated_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="test-key",
+        FISERV_API_SECRET="test-secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID=None,
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    service = FiservLiveService(ungated_settings)
+
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile is not None
+    assert profile["cif"] == "CIF-982341"
+    assert profile["metadata"]["live_sync_available"] is False
+    assert profile["metadata"]["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
+
+
+@patch("httpx.post")
+def test_get_customer_profile_4xx_fallback(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+
+    mock_404 = MagicMock()
+    mock_404.status_code = 404
+    mock_404.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Not Found", request=MagicMock(), response=mock_404
+    )
+
+    mock_post.return_value = mock_404
+
+    profile = service.get_customer_profile("CIF-982341")
+    assert profile is not None
+    assert profile["cif"] == "CIF-982341"
+    assert profile["metadata"]["live_sync_available"] is False
+    assert profile["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
 
 
 @patch("httpx.post")
@@ -716,7 +891,7 @@ def test_update_communication_preferences_live_success(mock_post, live_settings)
     mock_put_resp = MagicMock()
     mock_put_resp.status_code = 200
     mock_put_resp.json.return_value = {
-        "PartyId": "CIF-982341",
+        "PartyId": "PARTY-982341",
         "Status": {
             "StatusCode": 0,
             "Severity": "Info",

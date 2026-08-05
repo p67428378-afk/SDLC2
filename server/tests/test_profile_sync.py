@@ -170,6 +170,7 @@ def test_profile_update_live_mode_entitlement_fallback(client):
         FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
         FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
         FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID="PARTY-982341",
         FISERV_DEMO_ACCOUNTS="5041733:DDA",
     )
     live_service = FiservLiveService(live_settings)
@@ -203,6 +204,47 @@ def test_profile_update_live_mode_entitlement_fallback(client):
                 assert latest["live_sync_available"] is False
 
 
+def test_profile_update_live_mode_party_id_not_configured_fallback(client):
+    headers = get_auth_headers(client)
+
+    payload = {
+        "address": "100 Financial Plaza, Dallas, TX 75201",
+        "phone": "214-555-0199",
+        "email": "live_fallback@example.com",
+        "preferences": {
+            "paperless": True,
+            "email_notif": True,
+            "sms_notif": False,
+            "marketing": True,
+        },
+    }
+
+    from server.main import profile_sync_service
+    from server.config import Settings
+
+    ungated_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="key",
+        FISERV_API_SECRET="secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID=None,
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    live_service = FiservLiveService(ungated_settings)
+
+    with patch.object(profile_sync_service, "fiserv_service", live_service):
+        response = client.put("/api/v1/profile", headers=headers, json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == payload["address"]
+        assert "metadata" in data
+        assert data["metadata"]["live_sync_available"] is False
+        assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+        assert data["metadata"]["fallback_reason"] == "PARTY_ID_NOT_CONFIGURED"
+
+
 def test_profile_update_live_mode_success(client):
     headers = get_auth_headers(client)
 
@@ -221,7 +263,7 @@ def test_profile_update_live_mode_success(client):
     mock_party_put = MagicMock()
     mock_party_put.status_code = 200
     mock_party_put.json.return_value = {
-        "PartyId": "CIF-982341",
+        "PartyId": "PARTY-982341",
         "Status": {"StatusCode": 0, "Severity": "Info", "StatusDesc": "Success"},
     }
 
@@ -248,6 +290,7 @@ def test_profile_update_live_mode_success(client):
         FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
         FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
         FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID="PARTY-982341",
         FISERV_DEMO_ACCOUNTS="5041733:DDA",
     )
     live_service = FiservLiveService(live_settings)

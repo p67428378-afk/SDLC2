@@ -324,6 +324,7 @@ class FiservLiveService(FiservMockService):
         self.token_url = settings.FISERV_TOKEN_URL
         self.base_url = settings.FISERV_BASE_URL
         self.org_id = settings.FISERV_ORG_ID
+        self.party_id = getattr(settings, "FISERV_PARTY_ID", None)
         self.demo_accounts = settings.FISERV_DEMO_ACCOUNTS
 
         self._token = None
@@ -331,6 +332,8 @@ class FiservLiveService(FiservMockService):
 
         self._accounts_cache = None
         self._accounts_cache_at = None
+        self._profile_cache = None
+        self._profile_cache_at = None
         self._balance_adjustments: Dict[str, float] = {}
 
         self.accounts_to_query = []
@@ -418,6 +421,199 @@ class FiservLiveService(FiservMockService):
             raise last_exc
         raise RuntimeError("_call_with_retry called with attempts <= 0")
 
+    def _parse_party_response(
+        self, res_json: dict, cif: str, party_id: str
+    ) -> Dict[str, Any]:
+        mock_profile = super().get_customer_profile(cif) or {}
+
+        party_rec = res_json.get("PartyRec", {})
+        if not isinstance(party_rec, dict):
+            party_rec = res_json
+
+        person_info = party_rec.get("PersonPartyInfo", {})
+        person_data = (
+            person_info.get("PersonData", {}) if isinstance(person_info, dict) else {}
+        )
+
+        first_name = mock_profile.get("first_name", "Jane")
+        last_name = mock_profile.get("last_name", "Doe")
+        names = person_data.get("PersonName", [])
+        if isinstance(names, list) and len(names) > 0 and isinstance(names[0], dict):
+            first_name = names[0].get("GivenName") or first_name
+            last_name = names[0].get("FamilyName") or last_name
+
+        email = mock_profile.get("email", "test@example.com")
+        phone = mock_profile.get("phone", "1-800-555-0199")
+        address = mock_profile.get("address", "")
+
+        contacts = person_data.get("Contact", [])
+        if isinstance(contacts, list):
+            for contact in contacts:
+                if not isinstance(contact, dict):
+                    continue
+                if "Email" in contact and isinstance(contact["Email"], dict):
+                    email = contact["Email"].get("EmailAddr") or email
+                elif "PhoneNum" in contact and isinstance(contact["PhoneNum"], dict):
+                    phone = contact["PhoneNum"].get("Phone") or phone
+                elif "PostAddr" in contact and isinstance(contact["PostAddr"], dict):
+                    addr_obj = contact["PostAddr"]
+                    line1 = addr_obj.get("Addr1", "")
+                    city = addr_obj.get("City", "")
+                    state = addr_obj.get("StateProv", "")
+                    zip_code = addr_obj.get("PostalCode", "")
+                    addr_str = f"{line1}, {city}, {state} {zip_code}".strip(", ")
+                    if addr_str:
+                        address = addr_str
+
+        return {
+            "cif": cif,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone": phone,
+            "address": address,
+            "relationship_manager": mock_profile.get(
+                "relationship_manager", "Robert Vance"
+            ),
+            "preferences": mock_profile.get(
+                "preferences",
+                {
+                    "paperless": True,
+                    "email_notif": True,
+                    "sms_notif": False,
+                    "marketing": True,
+                },
+            ),
+            "metadata": {
+                "fiserv_sync": "LIVE_SUCCESS",
+                "live_sync_available": True,
+                "fallback_reason": None,
+            },
+        }
+
+    def get_customer_profile(self, cif: str) -> Optional[Dict[str, Any]]:
+        now = datetime.utcnow()
+        if (
+            self._profile_cache is not None
+            and self._profile_cache_at is not None
+            and now - self._profile_cache_at < self._FRESH_TTL
+        ):
+            return self._profile_cache
+
+        from server.config import settings
+
+        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
+        if not party_id:
+            mock_profile = super().get_customer_profile(cif)
+            if mock_profile:
+                res = mock_profile.copy()
+                res["metadata"] = {
+                    "fiserv_sync": "FALLBACK_SIMULATED",
+                    "live_sync_available": False,
+                    "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
+                }
+                self._profile_cache = res
+                self._profile_cache_at = now
+                return res
+            return None
+
+        url = f"{self.base_url}/partyservice/parties/parties/secured"
+        body = {"PartySel": {"PartyKeys": {"PartyId": party_id}}}
+
+        try:
+            res_json = self._call_with_retry(url, body, method="POST")
+            status_info = res_json.get("Status", {})
+            status_code = str(status_info.get("StatusCode", "0"))
+            if status_code != "0":
+                status_desc = status_info.get("StatusDesc", "Business Error")
+                if (
+                    status_code in ("401", "403", "404", "1120")
+                    or "entitle" in status_desc.lower()
+                    or "not authorized" in status_desc.lower()
+                    or "permission" in status_desc.lower()
+                ):
+                    fallback_reason = "ENTITLEMENT_DENIED"
+                else:
+                    fallback_reason = "BUSINESS_ERROR"
+
+                mock_profile = super().get_customer_profile(cif)
+                if mock_profile:
+                    res = mock_profile.copy()
+                    res["metadata"] = {
+                        "fiserv_sync": "FALLBACK_SIMULATED",
+                        "live_sync_available": False,
+                        "fallback_reason": fallback_reason,
+                    }
+                    self._profile_cache = res
+                    self._profile_cache_at = now
+                    return res
+                return None
+
+            live_profile = self._parse_party_response(res_json, cif, party_id)
+            self._profile_cache = live_profile
+            self._profile_cache_at = now
+            return live_profile
+
+        except httpx.HTTPStatusError as e:
+            if e.response is not None and (e.response.status_code // 100 == 4):
+                code_str = str(e.response.status_code)
+                fallback_reason = (
+                    "ENTITLEMENT_DENIED"
+                    if e.response.status_code in (401, 403, 404)
+                    else "CLIENT_ERROR_4XX"
+                )
+                print(
+                    f"[FISERV_PROFILE_FALLBACK] Organization ID {self.org_id} 4xx error on {url} (HTTP {code_str}). Falling back to mock profile."
+                )
+                mock_profile = super().get_customer_profile(cif)
+                if mock_profile:
+                    res = mock_profile.copy()
+                    res["metadata"] = {
+                        "fiserv_sync": "FALLBACK_SIMULATED",
+                        "live_sync_available": False,
+                        "fallback_reason": fallback_reason,
+                    }
+                    self._profile_cache = res
+                    self._profile_cache_at = now
+                    return res
+                return None
+
+            if (
+                self._profile_cache is not None
+                and self._profile_cache_at is not None
+                and now - self._profile_cache_at < self._STALE_TTL
+            ):
+                return self._profile_cache
+
+            mock_profile = super().get_customer_profile(cif)
+            if mock_profile:
+                res = mock_profile.copy()
+                res["metadata"] = {
+                    "fiserv_sync": "FALLBACK_SIMULATED",
+                    "live_sync_available": False,
+                    "fallback_reason": "SYSTEM_ERROR",
+                }
+                return res
+            return None
+        except (httpx.TimeoutException, httpx.ConnectError):
+            if (
+                self._profile_cache is not None
+                and self._profile_cache_at is not None
+                and now - self._profile_cache_at < self._STALE_TTL
+            ):
+                return self._profile_cache
+
+            mock_profile = super().get_customer_profile(cif)
+            if mock_profile:
+                res = mock_profile.copy()
+                res["metadata"] = {
+                    "fiserv_sync": "FALLBACK_SIMULATED",
+                    "live_sync_available": False,
+                    "fallback_reason": "NETWORK_ERROR",
+                }
+                return res
+            return None
+
     def update_customer_profile(
         self, cif: str, profile_data: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -428,8 +624,21 @@ class FiservLiveService(FiservMockService):
             "email": profile.get("email"),
         }
 
-        # Update local in-memory profile dictionary
-        super().update_customer_profile(cif, profile_data)
+        from server.config import settings
+
+        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
+        if not party_id:
+            print(
+                f"[FISERV_PARTY_GATED] Organization ID {self.org_id} - FISERV_PARTY_ID is unset. Skipping live HTTP call."
+            )
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
+            }
 
         url = f"{self.base_url}/partyservice/parties/parties"
 
@@ -441,7 +650,7 @@ class FiservLiveService(FiservMockService):
 
         body = {
             "OvrdAutoAckInd": "true",
-            "PartyKeys": {"PartyId": cif},
+            "PartyKeys": {"PartyId": party_id},
             "PersonPartyInfo": {
                 "PersonData": {
                     "PersonName": [
@@ -504,12 +713,17 @@ class FiservLiveService(FiservMockService):
                 print(
                     f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                 )
+                super().update_customer_profile(cif, profile_data)
+                self._profile_cache = None
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
                     "fallback_reason": fallback_reason,
                 }
+
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
 
             return {
                 "success": True,
@@ -519,20 +733,25 @@ class FiservLiveService(FiservMockService):
             }
 
         except httpx.HTTPStatusError as e:
-            code_str = str(e.response.status_code) if e.response is not None else "0"
-            if code_str in ("401", "403", "404"):
-                print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {code_str}). Falling back to simulated update."
+            if e.response is not None and (e.response.status_code // 100 == 4):
+                code_str = str(e.response.status_code)
+                fallback_reason = (
+                    "ENTITLEMENT_DENIED"
+                    if e.response.status_code in (401, 403, 404)
+                    else "CLIENT_ERROR_4XX"
                 )
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint {url} (HTTP {code_str}). Falling back to simulated update."
+                )
+                super().update_customer_profile(cif, profile_data)
+                self._profile_cache = None
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
+                    "fallback_reason": fallback_reason,
                 }
-            print(
-                f"Fiserv live update_customer_profile HTTP status error {code_str}: {str(e)}"
-            )
+            print(f"Fiserv live update_customer_profile HTTP status error: {str(e)}")
             raise e
         except (httpx.TimeoutException, httpx.ConnectError) as e:
             print(f"Fiserv live update_customer_profile network error: {str(e)}")
@@ -545,8 +764,21 @@ class FiservLiveService(FiservMockService):
         cur_prefs = profile.get("preferences", {})
         previous_state = cur_prefs.copy()
 
-        # Update local in-memory preferences dictionary first
-        super().update_communication_preferences(cif, preferences)
+        from server.config import settings
+
+        party_id = self.party_id or getattr(settings, "FISERV_PARTY_ID", None)
+        if not party_id:
+            print(
+                f"[FISERV_PARTY_GATED] Organization ID {self.org_id} - FISERV_PARTY_ID is unset. Skipping live HTTP call."
+            )
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "PARTY_ID_NOT_CONFIGURED",
+            }
 
         # a) Find customer's DDA checking account ID
         accounts = self.get_accounts(cif)
@@ -566,6 +798,8 @@ class FiservLiveService(FiservMockService):
             print(
                 f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} - No DDA checking account found for CIF {cif}. Falling back to simulated update."
             )
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
             return {
                 "success": True,
                 "previous_state": previous_state,
@@ -605,6 +839,8 @@ class FiservLiveService(FiservMockService):
                     print(
                         f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {secured_url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
                     )
+                    super().update_communication_preferences(cif, preferences)
+                    self._profile_cache = None
                     return {
                         "success": True,
                         "previous_state": previous_state,
@@ -612,18 +848,20 @@ class FiservLiveService(FiservMockService):
                         "fallback_reason": "ENTITLEMENT_DENIED",
                     }
             except httpx.HTTPStatusError as e:
-                code_str = (
-                    str(e.response.status_code) if e.response is not None else "0"
-                )
-                if code_str in ("401", "403", "404"):
+                if e.response is not None and (e.response.status_code // 100 == 4):
+                    code_str = str(e.response.status_code)
                     print(
-                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {secured_url} (HTTP {code_str}). Falling back to simulated update."
+                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint {secured_url} (HTTP {code_str}). Falling back to simulated update."
                     )
+                    super().update_communication_preferences(cif, preferences)
+                    self._profile_cache = None
                     return {
                         "success": True,
                         "previous_state": previous_state,
                         "live_sync_available": False,
-                        "fallback_reason": "ENTITLEMENT_DENIED",
+                        "fallback_reason": "ENTITLEMENT_DENIED"
+                        if e.response.status_code in (401, 403, 404)
+                        else "CLIENT_ERROR_4XX",
                     }
                 raise e
 
@@ -664,6 +902,8 @@ class FiservLiveService(FiservMockService):
                     print(
                         f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {create_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                     )
+                    super().update_communication_preferences(cif, preferences)
+                    self._profile_cache = None
                     return {
                         "success": True,
                         "previous_state": previous_state,
@@ -725,12 +965,17 @@ class FiservLiveService(FiservMockService):
                 print(
                     f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {put_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                 )
+                super().update_communication_preferences(cif, preferences)
+                self._profile_cache = None
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
                     "fallback_reason": fallback_reason,
                 }
+
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
 
             return {
                 "success": True,
@@ -741,19 +986,23 @@ class FiservLiveService(FiservMockService):
             }
 
         except httpx.HTTPStatusError as e:
-            code_str = str(e.response.status_code) if e.response is not None else "0"
-            if code_str in ("401", "403", "404"):
+            if e.response is not None and (e.response.status_code // 100 == 4):
+                code_str = str(e.response.status_code)
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint (HTTP {code_str}). Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint (HTTP {code_str}). Falling back to simulated update."
                 )
+                super().update_communication_preferences(cif, preferences)
+                self._profile_cache = None
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
+                    "fallback_reason": "ENTITLEMENT_DENIED"
+                    if e.response.status_code in (401, 403, 404)
+                    else "CLIENT_ERROR_4XX",
                 }
             print(
-                f"Fiserv live update_communication_preferences HTTP status error {code_str}: {str(e)}"
+                f"Fiserv live update_communication_preferences HTTP status error: {str(e)}"
             )
             raise e
         except (httpx.TimeoutException, httpx.ConnectError) as e:

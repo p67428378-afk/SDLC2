@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     FISERV_TOKEN_URL: Optional[str] = os.getenv("FISERV_TOKEN_URL")
     FISERV_BASE_URL: Optional[str] = os.getenv("FISERV_BASE_URL")
     FISERV_ORG_ID: Optional[str] = os.getenv("FISERV_ORG_ID")
+    FISERV_PARTY_ID: Optional[str] = os.getenv("FISERV_PARTY_ID")
     FISERV_DEMO_ACCOUNTS: Optional[str] = os.getenv(
         "FISERV_DEMO_ACCOUNTS", "5041733:DDA,302034131:Savings,290001702:CD"
     )
