@@ -379,6 +379,67 @@ class FiservLiveService(FiservMockService):
     def update_customer_profile(
         self, cif: str, profile_data: Dict[str, Any]
     ) -> Dict[str, Any]:
+        """
+        EFX v1 Party API Schema Contract & Integration Specification:
+        -------------------------------------------------------------
+        Endpoint: PUT https://bankinghub-cert.fiservapis.com/banking/efx/v1/partyservice/parties/parties
+
+        Request JSON Schema (EFX v1 Update Party):
+        {
+          "PartyId": "{cif}",
+          "PersonName": {
+            "FirstName": "Jane",
+            "LastName": "Doe"
+          },
+          "Addresses": [
+            {
+              "AddressType": "Primary",
+              "Line1": "123 Main St",
+              "City": "Dallas",
+              "State": "TX",
+              "PostalCode": "75201",
+              "CountryCode": "USA"
+            }
+          ],
+          "PhoneNumbers": [
+            {
+              "PhoneType": "Mobile",
+              "PhoneNumber": "1-555-123-4567"
+            }
+          ],
+          "EmailAddresses": [
+            {
+              "EmailType": "Primary",
+              "EmailAddress": "jane.doe@example.com"
+            }
+          ]
+        }
+
+        Field Mapping Rules:
+        - cif -> PartyId
+        - profile_data["address"] -> parsed via _parse_address() into Addresses[0] (Line1, City, State, PostalCode, CountryCode)
+        - profile_data["phone"] -> PhoneNumbers[0].PhoneNumber
+        - profile_data["email"] -> EmailAddresses[0].EmailAddress
+        - profile["first_name"], profile["last_name"] -> PersonName.FirstName, PersonName.LastName
+
+        Response JSON Schema (HTTP 200 OK):
+        {
+          "PartyId": "{cif}",
+          "Status": {
+            "StatusCode": 0,
+            "Severity": "Info",
+            "StatusDesc": "Party updated successfully"
+          }
+        }
+
+        Entitlement & Authorization Failure Trapping & Fallback Behavior:
+        - Traps HTTP 403 Forbidden / 404 Not Found or business errors where Status.StatusCode != 0
+          (e.g., StatusCode 1120 or 'not entitled'/'not authorized'/'permission' status descriptions).
+        - Emits structured log: '[FISERV_ENTITLEMENT_FALLBACK] Organization ID {org_id} ...'
+        - Sets live_sync_available=False, fallback_reason="ENTITLEMENT_DENIED" (or "BUSINESS_ERROR").
+        - Falls back gracefully to simulated update in memory (inherited from FiservMockService)
+          without throwing 500 or failing user request.
+        """
         profile = self.profiles.get(cif, {})
         previous_state = {
             "address": profile.get("address"),
@@ -474,6 +535,47 @@ class FiservLiveService(FiservMockService):
     def update_communication_preferences(
         self, cif: str, preferences: Dict[str, Any]
     ) -> Dict[str, Any]:
+        """
+        EFX v1 ePreferences API Schema Contract & Integration Specification:
+        --------------------------------------------------------------------
+        Endpoint: PUT https://bankinghub-cert.fiservapis.com/banking/efx/v1/epreferenceservice/epreference/ePreferences
+
+        Request JSON Schema (EFX v1 Update ePreferences):
+        {
+          "PartyId": "{cif}",
+          "EPreferences": {
+            "PaperlessDelivery": true,
+            "EmailAlerts": true,
+            "SMSAlerts": false,
+            "MarketingOptIn": false
+          }
+        }
+
+        Field Mapping Rules:
+        - cif -> PartyId
+        - preferences["paperless"] -> EPreferences.PaperlessDelivery
+        - preferences["email_notif"] -> EPreferences.EmailAlerts
+        - preferences["sms_notif"] -> EPreferences.SMSAlerts
+        - preferences["marketing"] -> EPreferences.MarketingOptIn
+
+        Response JSON Schema (HTTP 200 OK):
+        {
+          "PartyId": "{cif}",
+          "Status": {
+            "StatusCode": 0,
+            "Severity": "Info",
+            "StatusDesc": "ePreferences updated successfully"
+          }
+        }
+
+        Entitlement & Authorization Failure Trapping & Fallback Behavior:
+        - Traps HTTP 403 Forbidden / 404 Not Found or business errors where Status.StatusCode != 0
+          (e.g., StatusCode 1120 or 'not entitled'/'not authorized'/'permission' status descriptions).
+        - Emits structured log: '[FISERV_ENTITLEMENT_FALLBACK] Organization ID {org_id} ...'
+        - Sets live_sync_available=False, fallback_reason="ENTITLEMENT_DENIED" (or "BUSINESS_ERROR").
+        - Falls back gracefully to simulated update in memory (inherited from FiservMockService)
+          without throwing 500 or failing user request.
+        """
         profile = self.profiles.get(cif, {})
         cur_prefs = profile.get("preferences", {})
         previous_state = cur_prefs.copy()
