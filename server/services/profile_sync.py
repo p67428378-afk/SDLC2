@@ -201,6 +201,12 @@ class ProfileSyncService:
 
         # Return updated profile with sync metadata
         updated_profile = self.fiserv_service.get_customer_profile(fiserv_cif) or {}
+        updated_profile["status"] = "success"
+        updated_profile["message"] = (
+            "Profile updated successfully."
+            if live_sync_available
+            else "Profile updated locally (Fiserv live sync fallback applied due to entitlement constraints)."
+        )
         updated_profile["metadata"] = {
             "fiserv_sync": "LIVE_SUCCESS"
             if live_sync_available

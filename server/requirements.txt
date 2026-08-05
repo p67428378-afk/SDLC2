@@ -1,3 +1,4 @@
+# Merged server/requirements.txt
 fastapi>=0.100.0
 uvicorn>=0.22.0
 sqlalchemy>=2.0.0

@@ -210,6 +210,67 @@ class FiservMockService(CoreBankingService):
         self.__init__()
 
 
+def _parse_address(raw_address: Any) -> Dict[str, str]:
+    if isinstance(raw_address, dict):
+        return {
+            "AddressType": raw_address.get("AddressType", "Primary"),
+            "Line1": raw_address.get("Line1", raw_address.get("address", "")),
+            "City": raw_address.get("City", ""),
+            "State": raw_address.get("State", ""),
+            "PostalCode": raw_address.get("PostalCode", ""),
+            "CountryCode": raw_address.get("CountryCode", "USA"),
+        }
+
+    if not isinstance(raw_address, str) or not raw_address.strip():
+        return {
+            "AddressType": "Primary",
+            "Line1": "",
+            "City": "",
+            "State": "",
+            "PostalCode": "",
+            "CountryCode": "USA",
+        }
+
+    parts = [p.strip() for p in raw_address.split(",") if p.strip()]
+    if len(parts) >= 3:
+        line1 = ", ".join(parts[:-2])
+        city = parts[-2]
+        state_zip = parts[-1].split()
+        state = state_zip[0] if len(state_zip) >= 1 else ""
+        postal_code = state_zip[1] if len(state_zip) >= 2 else ""
+        return {
+            "AddressType": "Primary",
+            "Line1": line1,
+            "City": city,
+            "State": state,
+            "PostalCode": postal_code,
+            "CountryCode": "USA",
+        }
+    elif len(parts) == 2:
+        line1 = parts[0]
+        rest = parts[1].split()
+        city = rest[0] if len(rest) >= 1 else ""
+        state = rest[1] if len(rest) >= 2 else ""
+        postal_code = rest[2] if len(rest) >= 3 else ""
+        return {
+            "AddressType": "Primary",
+            "Line1": line1,
+            "City": city,
+            "State": state,
+            "PostalCode": postal_code,
+            "CountryCode": "USA",
+        }
+    else:
+        return {
+            "AddressType": "Primary",
+            "Line1": raw_address.strip(),
+            "City": "",
+            "State": "",
+            "PostalCode": "",
+            "CountryCode": "USA",
+        }
+
+
 class FiservLiveService(FiservMockService):
     _FRESH_TTL = timedelta(seconds=20)
     _STALE_TTL = timedelta(minutes=5)
@@ -269,15 +330,14 @@ class FiservLiveService(FiservMockService):
         self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
         return self._token
 
-    def _build_efx_header(self) -> str:
-        return json.dumps({"OrganizationId": self.org_id, "TrnId": str(uuid.uuid4())})
-
     def _make_api_call(self, url: str, json_body: dict, method: str = "POST") -> dict:
         token = self._get_token()
         headers = {
             "Authorization": f"Bearer {token}",
             "accept": "application/json",
-            "EFXHeader": self._build_efx_header(),
+            "EFXHeader": json.dumps(
+                {"OrganizationId": self.org_id, "TrnId": str(uuid.uuid4())}
+            ),
             "Content-Type": "application/json",
         }
 
@@ -331,7 +391,9 @@ class FiservLiveService(FiservMockService):
 
         url = f"{self.base_url}/partyservice/parties/parties"
 
-        new_address = profile_data.get("address", profile.get("address", ""))
+        raw_address = profile_data.get("address", profile.get("address", ""))
+        parsed_addr = _parse_address(raw_address)
+
         new_phone = profile_data.get("phone", profile.get("phone", ""))
         new_email = profile_data.get("email", profile.get("email", ""))
 
@@ -341,16 +403,7 @@ class FiservLiveService(FiservMockService):
                 "FirstName": profile.get("first_name", "Jane"),
                 "LastName": profile.get("last_name", "Doe"),
             },
-            "Addresses": [
-                {
-                    "AddressType": "Primary",
-                    "Line1": new_address,
-                    "City": "Dallas",
-                    "State": "TX",
-                    "PostalCode": "75201",
-                    "CountryCode": "USA",
-                }
-            ],
+            "Addresses": [parsed_addr],
             "PhoneNumbers": [
                 {
                     "PhoneType": "Mobile",
@@ -371,14 +424,24 @@ class FiservLiveService(FiservMockService):
             status_code = str(status_info.get("StatusCode", "0"))
             if status_code != "0":
                 status_desc = status_info.get("StatusDesc", "Business Error")
+                if (
+                    status_code in ("403", "404", "1120")
+                    or "entitle" in status_desc.lower()
+                    or "not authorized" in status_desc.lower()
+                    or "permission" in status_desc.lower()
+                ):
+                    fallback_reason = "ENTITLEMENT_DENIED"
+                else:
+                    fallback_reason = "BUSINESS_ERROR"
+
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                 )
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
+                    "fallback_reason": fallback_reason,
                 }
 
             return {
@@ -400,21 +463,12 @@ class FiservLiveService(FiservMockService):
                     "live_sync_available": False,
                     "fallback_reason": "ENTITLEMENT_DENIED",
                 }
-            print(f"Fiserv live update_customer_profile error: {str(e)}")
+            print(
+                f"Fiserv live update_customer_profile HTTP status error {status_code}: {str(e)}"
+            )
             raise e
-        except Exception as e:
-            err_str = str(e)
-            if "403" in err_str or "404" in err_str:
-                print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} ({err_str}). Falling back to simulated update."
-                )
-                return {
-                    "success": True,
-                    "previous_state": previous_state,
-                    "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
-                }
-            print(f"Fiserv live update_customer_profile unexpected error: {str(e)}")
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            print(f"Fiserv live update_customer_profile network error: {str(e)}")
             raise e
 
     def update_communication_preferences(
@@ -447,14 +501,24 @@ class FiservLiveService(FiservMockService):
             status_code = str(status_info.get("StatusCode", "0"))
             if status_code != "0":
                 status_desc = status_info.get("StatusDesc", "Business Error")
+                if (
+                    status_code in ("403", "404", "1120")
+                    or "entitle" in status_desc.lower()
+                    or "not authorized" in status_desc.lower()
+                    or "permission" in status_desc.lower()
+                ):
+                    fallback_reason = "ENTITLEMENT_DENIED"
+                else:
+                    fallback_reason = "BUSINESS_ERROR"
+
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                 )
                 return {
                     "success": True,
                     "previous_state": previous_state,
                     "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
+                    "fallback_reason": fallback_reason,
                 }
 
             return {
@@ -476,22 +540,13 @@ class FiservLiveService(FiservMockService):
                     "live_sync_available": False,
                     "fallback_reason": "ENTITLEMENT_DENIED",
                 }
-            print(f"Fiserv live update_communication_preferences error: {str(e)}")
-            raise e
-        except Exception as e:
-            err_str = str(e)
-            if "403" in err_str or "404" in err_str:
-                print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} ({err_str}). Falling back to simulated update."
-                )
-                return {
-                    "success": True,
-                    "previous_state": previous_state,
-                    "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED",
-                }
             print(
-                f"Fiserv live update_communication_preferences unexpected error: {str(e)}"
+                f"Fiserv live update_communication_preferences HTTP status error {status_code}: {str(e)}"
+            )
+            raise e
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            print(
+                f"Fiserv live update_communication_preferences network error: {str(e)}"
             )
             raise e
 

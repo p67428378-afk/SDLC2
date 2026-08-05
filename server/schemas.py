@@ -58,6 +58,8 @@ class UserProfileResponse(BaseModel):
     relationship_manager: str
     preferences: ProfilePreferences
     metadata: Optional[ProfileSyncMetadata] = None
+    status: Optional[str] = "success"
+    message: Optional[str] = "Profile updated successfully"
 
 
 class UserProfileUpdateRequest(BaseModel):

@@ -1,3 +1,4 @@
+import httpx
 from unittest.mock import patch, MagicMock
 from server.tests.test_payments import get_auth_headers
 from server.services.fiserv import FiservLiveService
@@ -155,7 +156,9 @@ def test_profile_update_live_mode_entitlement_fallback(client):
 
     mock_403 = MagicMock()
     mock_403.status_code = 403
-    mock_403.raise_for_status.side_effect = Exception("403 Forbidden")
+    mock_403.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Forbidden", request=MagicMock(), response=mock_403
+    )
 
     # Patch fiserv_service to be FiservLiveService with mocked network calls returning 403
     from server.main import profile_sync_service

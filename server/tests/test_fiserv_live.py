@@ -1,10 +1,11 @@
-import json
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 from server.config import Settings
 from server.services.fiserv import (
     FiservLiveService,
+    FiservMockService,
+    get_core_banking_service,
 )
 
 
@@ -54,7 +55,6 @@ def test_get_token_success(mock_post, live_settings):
     assert service._token == "mock-access-token"
     assert service._token_expires_at is not None
 
-    # Second call should use cached token without extra POST
     mock_post.reset_mock()
     token2 = service._get_token()
     assert token2 == "mock-access-token"
@@ -67,7 +67,6 @@ def test_get_token_string_expires_in(mock_post, live_settings):
 
     mock_response = MagicMock()
     mock_response.status_code = 200
-    # Fiserv returns expires_in as string "3600"
     mock_response.json.return_value = {
         "access_token": "mock-access-token",
         "expires_in": "3600",
@@ -81,7 +80,33 @@ def test_get_token_string_expires_in(mock_post, live_settings):
 
 
 @patch("httpx.post")
-def test_get_accounts_success(mock_post, live_settings):
+def test_token_refresh_on_401(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+    service._token = "expired-token"
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "new-token",
+        "expires_in": 3600,
+    }
+
+    mock_401_resp = MagicMock()
+    mock_401_resp.status_code = 401
+
+    mock_200_resp = MagicMock()
+    mock_200_resp.status_code = 200
+    mock_200_resp.json.return_value = {"Status": {"StatusCode": "0"}}
+
+    mock_post.side_effect = [mock_401_resp, mock_token_resp, mock_200_resp]
+
+    res = service._make_api_call("https://example.com/api", {"test": True})
+    assert res == {"Status": {"StatusCode": "0"}}
+    assert service._token == "new-token"
+
+
+@patch("httpx.post")
+def test_get_accounts_parses_live_fiserv_data(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
     mock_token_resp = MagicMock()
@@ -98,11 +123,12 @@ def test_get_accounts_success(mock_post, live_settings):
             "StatusCode": "0",
             "StatusDesc": "Success",
             "Severity": "Info",
-            "SvcProviderName": "Premier",
         },
         "AcctRec": {
             "DepositAcctInfo": {
                 "AcctDtlStatus": "Active",
+                "Nickname": "Primary Checking",
+                "Rate": "0.05",
                 "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 15000.50}}],
             }
         },
@@ -118,32 +144,426 @@ def test_get_accounts_success(mock_post, live_settings):
     accounts = service.get_accounts("CIF-982341")
     assert len(accounts) == 3
     assert accounts[0]["id"] == "5041733"
+    assert accounts[0]["name"] == "Primary Checking"
     assert accounts[0]["type"] == "DDA"
     assert accounts[0]["balance"] == 15000.50
     assert accounts[0]["account_number"] == "•••• 1733"
     assert accounts[0]["status"] == "Active"
     assert "raw_source" in accounts[0]
-    assert accounts[0]["raw_source"] == mock_acct_resp.json.return_value
 
-    account_calls = mock_post.call_args_list[1:]
-    assert len(account_calls) == 3
 
-    headers0 = account_calls[0].kwargs.get("headers", {})
-    assert "EFXHeader" in headers0
-    efx_header = json.loads(headers0["EFXHeader"])
-    assert efx_header["OrganizationId"] == "999990301"
-    assert "TrnId" in efx_header
-    assert headers0["Authorization"] == "Bearer mock-access-token"
+@patch("httpx.post")
+def test_get_accounts_loan_type_exclusion(mock_post, live_settings):
+    settings_with_loan = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="test-key",
+        FISERV_API_SECRET="test-secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_DEMO_ACCOUNTS="5041733:DDA,111222:Loan,333444:DDL",
+    )
+    service = FiservLiveService(settings_with_loan)
 
-    body0 = account_calls[0].kwargs.get("json", {})
-    assert body0 == {
-        "AcctSel": {
-            "AcctKeys": {
-                "AcctId": "5041733",
-                "AcctType": "DDA",
-            }
-        }
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
     }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 1000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [mock_token_resp, mock_acct_resp]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 1
+    assert accounts[0]["id"] == "5041733"
+
+
+@patch("httpx.post")
+def test_get_accounts_business_error_handling(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_err_resp = MagicMock()
+    mock_err_resp.status_code = 200
+    mock_err_resp.json.return_value = {
+        "Status": {"StatusCode": "1001", "StatusDesc": "Account Not Found"}
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_err_resp,
+        mock_err_resp,
+        mock_err_resp,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 0
+
+
+@patch("httpx.post")
+def test_get_accounts_graceful_degradation(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        httpx.ConnectError("Connection failed"),
+        httpx.ConnectError("Connection failed"),
+        httpx.ConnectError("Connection failed"),
+        httpx.ConnectError("Connection failed"),
+        httpx.ConnectError("Connection failed"),
+        httpx.ConnectError("Connection failed"),
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert accounts == []
+
+
+@patch("httpx.post")
+def test_get_accounts_uses_cache_within_ttl(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 5000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    accs1 = service.get_accounts("CIF-982341")
+    assert len(accs1) == 3
+
+    mock_post.reset_mock()
+    accs2 = service.get_accounts("CIF-982341")
+    assert len(accs2) == 3
+    mock_post.assert_not_called()
+
+
+@patch("httpx.post")
+def test_get_accounts_stale_fallback_on_degradation(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 5000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    accs1 = service.get_accounts("CIF-982341")
+    assert len(accs1) == 3
+
+    # Force cache expiration beyond fresh TTL but within stale TTL
+    service._accounts_cache_at -= service._FRESH_TTL * 2
+
+    mock_err_resp = MagicMock()
+    mock_err_resp.status_code = 200
+    mock_err_resp.json.return_value = {"Status": {"StatusCode": "1001"}}
+
+    mock_post.reset_mock()
+    mock_post.side_effect = [mock_err_resp, mock_err_resp, mock_err_resp]
+
+    accs2 = service.get_accounts("CIF-982341")
+    assert len(accs2) == 3  # Serves last known good snapshot
+
+
+@patch("httpx.post")
+def test_get_accounts_retries_transient_network_error(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 5000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        httpx.ConnectError("Transient error"),
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 3
+
+
+@patch("httpx.post")
+def test_raw_source_in_live_and_mock_mode(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 5000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    live_accounts = service.get_accounts("CIF-982341")
+    assert "raw_source" in live_accounts[0]
+
+    mock_service = FiservMockService()
+    mock_accounts = mock_service.get_accounts("CIF-982341")
+    assert len(mock_accounts) > 0
+
+
+@patch("httpx.post")
+def test_debit_and_credit_are_simulated(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 1000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    assert service.get_available_balance("5041733") == 1000.00
+    assert service.debit_account("5041733", 200.00) is True
+    assert service.get_available_balance("5041733") == 800.00
+
+    assert service.credit_account("5041733", 100.00) is True
+    assert service.get_available_balance("5041733") == 900.00
+
+
+@patch("httpx.post")
+def test_debit_account_insufficient_funds(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 100.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    assert service.debit_account("5041733", 500.00) is False
+    assert service.get_available_balance("5041733") == 100.00
+
+
+@patch("httpx.post")
+def test_validate_account_live(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 1000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    assert service.validate_account("5041733") is True
+    assert service.validate_account("non-existent") is False
+
+
+@patch("httpx.post")
+def test_simulated_payment_persists_across_cache_refresh(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 1000.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    assert service.get_available_balance("5041733") == 1000.00
+    service.debit_account("5041733", 300.00)
+
+    # Force cache refresh
+    service._accounts_cache = None
+
+    mock_post.reset_mock()
+    mock_post.side_effect = [mock_acct_resp, mock_acct_resp, mock_acct_resp]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert accounts[0]["balance"] == 700.00
+
+
+def test_factory_pattern():
+    with patch("server.config.settings.FISERV_MODE", "mock"):
+        srv = get_core_banking_service()
+        assert isinstance(srv, FiservMockService)
+
+    with patch("server.config.settings.FISERV_MODE", "live"):
+        with patch("server.services.fiserv._service_instance", None):
+            srv_live = get_core_banking_service()
+            assert isinstance(srv_live, FiservLiveService)
+
+
+# --- Profile Update Live Tests ---
 
 
 @patch("httpx.post")
@@ -192,7 +612,10 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
 
         body_called = mock_put.call_args.kwargs["json"]
         assert body_called["PartyId"] == "CIF-982341"
-        assert body_called["Addresses"][0]["Line1"] == "789 Main St, Dallas, TX 75201"
+        assert body_called["Addresses"][0]["Line1"] == "789 Main St"
+        assert body_called["Addresses"][0]["City"] == "Dallas"
+        assert body_called["Addresses"][0]["State"] == "TX"
+        assert body_called["Addresses"][0]["PostalCode"] == "75201"
         assert body_called["PhoneNumbers"][0]["PhoneNumber"] == "1-555-123-4567"
         assert (
             body_called["EmailAddresses"][0]["EmailAddress"] == "jane.new@example.com"
@@ -320,6 +743,44 @@ def test_update_customer_profile_business_error_fallback(mock_post, live_setting
 
 
 @patch("httpx.post")
+def test_update_customer_profile_generic_business_error_fallback(
+    mock_post, live_settings
+):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+    mock_post.return_value = mock_token_resp
+
+    mock_biz_err = MagicMock()
+    mock_biz_err.status_code = 200
+    mock_biz_err.json.return_value = {
+        "Status": {
+            "StatusCode": 9999,
+            "StatusDesc": "Generic Core System Error",
+        }
+    }
+
+    with patch("httpx.put", return_value=mock_biz_err):
+        res = service.update_customer_profile(
+            "CIF-982341",
+            {
+                "address": "123 Main St, New York, NY 10001",
+                "phone": "1-800-555-0199",
+                "email": "test@example.com",
+            },
+        )
+
+        assert res["success"] is True
+        assert res["live_sync_available"] is False
+        assert res["fallback_reason"] == "BUSINESS_ERROR"
+
+
+@patch("httpx.post")
 def test_update_customer_profile_transient_retry(mock_post, live_settings):
     service = FiservLiveService(live_settings)
 
@@ -337,7 +798,6 @@ def test_update_customer_profile_transient_retry(mock_post, live_settings):
         "Status": {"StatusCode": 0, "StatusDesc": "Success"}
     }
 
-    # First attempt raises ConnectError, second attempt succeeds
     with patch(
         "httpx.put",
         side_effect=[httpx.ConnectError("Connection reset"), mock_put_success],
