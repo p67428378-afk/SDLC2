@@ -77,6 +77,8 @@ class ProfileSyncService:
                 or "ENTITLEMENT_DENIED"
             )
 
+        partial_fiserv_sync = fiserv_pref_res.get("partial_fiserv_sync")
+
         # 3. Sync to Cenlar
         cenlar_profile_res = None
         cenlar_pref_res = None
@@ -166,6 +168,10 @@ class ProfileSyncService:
 
         status_value = "SUCCESS" if live_sync_available else "FALLBACK_SIMULATED"
 
+        comp_details = None
+        if partial_fiserv_sync and live_sync_available:
+            comp_details = {"partial_fiserv_sync": partial_fiserv_sync}
+
         log = ProfileChangeLog(
             user_id=user.id,
             changed_fields_before=changed_fields_before,
@@ -174,6 +180,7 @@ class ProfileSyncService:
             live_sync_available=live_sync_available,
             failure_reason=fallback_reason,
             compensation_applied=False,
+            compensation_details=comp_details,
         )
         db.add(log)
 
@@ -207,7 +214,8 @@ class ProfileSyncService:
             if live_sync_available
             else "Profile updated locally (Fiserv live sync fallback applied due to entitlement constraints)."
         )
-        updated_profile["metadata"] = {
+
+        metadata = {
             "fiserv_sync": "LIVE_SUCCESS"
             if live_sync_available
             else "FALLBACK_SIMULATED",
@@ -215,4 +223,8 @@ class ProfileSyncService:
             "live_sync_available": live_sync_available,
             "fallback_reason": fallback_reason,
         }
+        if partial_fiserv_sync and live_sync_available:
+            metadata["partial_fiserv_sync"] = partial_fiserv_sync
+
+        updated_profile["metadata"] = metadata
         return updated_profile

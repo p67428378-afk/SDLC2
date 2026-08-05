@@ -1,6 +1,7 @@
 import pytest
 import json
 import httpx
+from datetime import datetime
 from unittest.mock import patch, MagicMock
 from server.config import Settings
 from server.services.fiserv import (
@@ -635,14 +636,7 @@ def test_factory_pattern():
 @patch("httpx.post")
 def test_update_customer_profile_live_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
-    }
-    mock_post.return_value = mock_token_resp
+    service._token = "mock-token"
 
     mock_put_resp = MagicMock()
     mock_put_resp.status_code = 200
@@ -677,28 +671,47 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
         )
 
         body_called = mock_put.call_args.kwargs["json"]
-        assert body_called["PartyId"] == "CIF-982341"
-        assert body_called["Addresses"][0]["Line1"] == "789 Main St"
-        assert body_called["Addresses"][0]["City"] == "Dallas"
-        assert body_called["Addresses"][0]["State"] == "TX"
-        assert body_called["Addresses"][0]["PostalCode"] == "75201"
-        assert body_called["PhoneNumbers"][0]["PhoneNumber"] == "1-555-123-4567"
+        assert body_called["OvrdAutoAckInd"] == "true"
+        assert body_called["PartyKeys"]["PartyId"] == "CIF-982341"
         assert (
-            body_called["EmailAddresses"][0]["EmailAddress"] == "jane.new@example.com"
+            body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["GivenName"]
+            == "Jane"
         )
+        assert (
+            body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["FamilyName"]
+            == "Doe"
+        )
+        contacts = body_called["PersonPartyInfo"]["PersonData"]["Contact"]
+        assert contacts[0]["PostAddr"]["Addr1"] == "789 Main St"
+        assert contacts[0]["PostAddr"]["City"] == "Dallas"
+        assert contacts[0]["PostAddr"]["StateProv"] == "TX"
+        assert contacts[0]["PostAddr"]["PostalCode"] == "75201"
+        assert contacts[1]["Email"]["EmailAddr"] == "jane.new@example.com"
+        assert contacts[2]["PhoneNum"]["Phone"] == "1-555-123-4567"
 
 
 @patch("httpx.post")
 def test_update_communication_preferences_live_success(mock_post, live_settings):
     service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+    service._accounts_cache = [
+        {
+            "id": "5041733",
+            "name": "Primary Checking",
+            "type": "DDA",
+            "balance": 1000.0,
+            "status": "Active",
+        }
+    ]
+    service._accounts_cache_at = datetime.utcnow()
 
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
+    mock_secured_resp = MagicMock()
+    mock_secured_resp.status_code = 200
+    mock_secured_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "EPreferenceRec": {"EPreferenceKeys": {"EPreferenceIdent": "epref-123"}},
     }
-    mock_post.return_value = mock_token_resp
+    mock_post.side_effect = [mock_secured_resp]
 
     mock_put_resp = MagicMock()
     mock_put_resp.status_code = 200
@@ -725,6 +738,7 @@ def test_update_communication_preferences_live_success(mock_post, live_settings)
         assert res["success"] is True
         assert res["live_sync_available"] is True
         assert res["fallback_reason"] is None
+        assert res["partial_fiserv_sync"] == ["sms_notif", "marketing"]
 
         mock_put.assert_called_once()
         url_called = mock_put.call_args[0][0]
@@ -734,22 +748,83 @@ def test_update_communication_preferences_live_success(mock_post, live_settings)
         )
 
         body_called = mock_put.call_args.kwargs["json"]
-        assert body_called["PartyId"] == "CIF-982341"
-        assert body_called["EPreferences"]["PaperlessDelivery"] is True
-        assert body_called["EPreferences"]["MarketingOptIn"] is False
+        assert body_called["OverrideException"] is True
+        assert body_called["EPreferenceKeys"]["AcctKeys"]["AcctId"] == "5041733"
+        assert body_called["EPreferenceKeys"]["AcctKeys"]["AcctType"] == "DDA"
+        assert body_called["EPreferenceKeys"]["ePreferenceIdent"] == "epref-123"
+        assert body_called["EPreferenceInfo"]["CombinedStmtInd"] is True
+        assert len(body_called["EPreferenceInfo"]["EmailLink"]) == 1
+        assert (
+            body_called["EPreferenceInfo"]["EmailLink"][0]["Email"]["EmailAddr"]
+            == "test@example.com"
+        )
+
+
+@patch("httpx.post")
+def test_update_communication_preferences_3_call_sequence_with_create(
+    mock_post, live_settings
+):
+    service = FiservLiveService(live_settings)
+    service._token = "mock-token"
+    service._accounts_cache = [
+        {
+            "id": "5041733",
+            "name": "Primary Checking",
+            "type": "DDA",
+            "balance": 1000.0,
+            "status": "Active",
+        }
+    ]
+    service._accounts_cache_at = datetime.utcnow()
+
+    mock_secured_resp = MagicMock()
+    mock_secured_resp.status_code = 200
+    mock_secured_resp.json.return_value = {
+        "Status": {"StatusCode": "1001", "StatusDesc": "Not Found"}
+    }
+
+    mock_create_resp = MagicMock()
+    mock_create_resp.status_code = 200
+    mock_create_resp.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "EPreferenceStatusRec": {
+            "EPreferenceKeys": [{"EPreferenceIdent": "new-epref-456"}]
+        },
+    }
+
+    mock_post.side_effect = [mock_secured_resp, mock_create_resp]
+
+    mock_put_resp = MagicMock()
+    mock_put_resp.status_code = 200
+    mock_put_resp.json.return_value = {
+        "Status": {"StatusCode": 0, "StatusDesc": "ePreferences updated successfully"},
+    }
+
+    with patch("httpx.put", return_value=mock_put_resp) as mock_put:
+        res = service.update_communication_preferences(
+            "CIF-982341",
+            {
+                "paperless": False,
+                "email_notif": False,
+                "sms_notif": True,
+                "marketing": True,
+            },
+        )
+
+        assert res["success"] is True
+        assert res["live_sync_available"] is True
+        assert res["partial_fiserv_sync"] == ["sms_notif", "marketing"]
+
+        body_called = mock_put.call_args.kwargs["json"]
+        assert body_called["EPreferenceKeys"]["ePreferenceIdent"] == "new-epref-456"
+        assert body_called["EPreferenceInfo"]["CombinedStmtInd"] is False
+        assert body_called["EPreferenceInfo"]["EmailLink"] == []
 
 
 @patch("httpx.post")
 def test_update_customer_profile_entitlement_403_fallback(mock_post, live_settings):
     service = FiservLiveService(live_settings)
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
-    }
-    mock_post.return_value = mock_token_resp
+    service._token = "mock-token"
 
     mock_403 = MagicMock()
     mock_403.status_code = 403
@@ -775,14 +850,7 @@ def test_update_customer_profile_entitlement_403_fallback(mock_post, live_settin
 @patch("httpx.post")
 def test_update_customer_profile_business_error_fallback(mock_post, live_settings):
     service = FiservLiveService(live_settings)
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
-    }
-    mock_post.return_value = mock_token_resp
+    service._token = "mock-token"
 
     mock_biz_err = MagicMock()
     mock_biz_err.status_code = 200
@@ -813,14 +881,7 @@ def test_update_customer_profile_generic_business_error_fallback(
     mock_post, live_settings
 ):
     service = FiservLiveService(live_settings)
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
-    }
-    mock_post.return_value = mock_token_resp
+    service._token = "mock-token"
 
     mock_biz_err = MagicMock()
     mock_biz_err.status_code = 200
@@ -849,14 +910,7 @@ def test_update_customer_profile_generic_business_error_fallback(
 @patch("httpx.post")
 def test_update_customer_profile_transient_retry(mock_post, live_settings):
     service = FiservLiveService(live_settings)
-
-    mock_token_resp = MagicMock()
-    mock_token_resp.status_code = 200
-    mock_token_resp.json.return_value = {
-        "access_token": "mock-access-token",
-        "expires_in": 3600,
-    }
-    mock_post.return_value = mock_token_resp
+    service._token = "mock-token"
 
     mock_put_success = MagicMock()
     mock_put_success.status_code = 200

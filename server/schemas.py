@@ -46,6 +46,7 @@ class ProfileSyncMetadata(BaseModel):
     cenlar_sync: str = "SIMULATED"
     live_sync_available: bool = True
     fallback_reason: Optional[str] = None
+    partial_fiserv_sync: Optional[List[str]] = None
 
 
 class UserProfileResponse(BaseModel):

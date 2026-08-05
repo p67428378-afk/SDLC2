@@ -160,7 +160,6 @@ def test_profile_update_live_mode_entitlement_fallback(client):
         "Forbidden", request=MagicMock(), response=mock_403
     )
 
-    # Patch fiserv_service to be FiservLiveService with mocked network calls returning 403
     from server.main import profile_sync_service
     from server.config import Settings
 
@@ -174,6 +173,15 @@ def test_profile_update_live_mode_entitlement_fallback(client):
         FISERV_DEMO_ACCOUNTS="5041733:DDA",
     )
     live_service = FiservLiveService(live_settings)
+    live_service._accounts_cache = [
+        {
+            "id": "5041733",
+            "name": "Primary Checking",
+            "type": "DDA",
+            "balance": 1000.0,
+            "status": "Active",
+        }
+    ]
 
     with patch.object(profile_sync_service, "fiserv_service", live_service):
         with patch.object(live_service, "_get_token", return_value="mock-token"):
@@ -187,7 +195,6 @@ def test_profile_update_live_mode_entitlement_fallback(client):
                 assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
                 assert data["metadata"]["fallback_reason"] == "ENTITLEMENT_DENIED"
 
-                # Verify history persists FALLBACK_SIMULATED and live_sync_available=False
                 res_hist = client.get("/api/v1/profile/history", headers=headers)
                 assert res_hist.status_code == 200
                 history = res_hist.json()
@@ -211,10 +218,23 @@ def test_profile_update_live_mode_success(client):
         },
     }
 
-    mock_ok = MagicMock()
-    mock_ok.status_code = 200
-    mock_ok.json.return_value = {
+    mock_party_put = MagicMock()
+    mock_party_put.status_code = 200
+    mock_party_put.json.return_value = {
         "PartyId": "CIF-982341",
+        "Status": {"StatusCode": 0, "Severity": "Info", "StatusDesc": "Success"},
+    }
+
+    mock_secured_post = MagicMock()
+    mock_secured_post.status_code = 200
+    mock_secured_post.json.return_value = {
+        "Status": {"StatusCode": "0"},
+        "EPreferenceRec": {"EPreferenceKeys": {"EPreferenceIdent": "epref-999"}},
+    }
+
+    mock_epref_put = MagicMock()
+    mock_epref_put.status_code = 200
+    mock_epref_put.json.return_value = {
         "Status": {"StatusCode": 0, "Severity": "Info", "StatusDesc": "Success"},
     }
 
@@ -231,22 +251,41 @@ def test_profile_update_live_mode_success(client):
         FISERV_DEMO_ACCOUNTS="5041733:DDA",
     )
     live_service = FiservLiveService(live_settings)
+    live_service._accounts_cache = [
+        {
+            "id": "5041733",
+            "name": "Primary Checking",
+            "type": "DDA",
+            "balance": 1000.0,
+            "status": "Active",
+        }
+    ]
 
     with patch.object(profile_sync_service, "fiserv_service", live_service):
         with patch.object(live_service, "_get_token", return_value="mock-token"):
-            with patch("httpx.put", return_value=mock_ok):
-                response = client.put("/api/v1/profile", headers=headers, json=payload)
-                assert response.status_code == 200
-                data = response.json()
-                assert data["address"] == payload["address"]
-                assert "metadata" in data
-                assert data["metadata"]["live_sync_available"] is True
-                assert data["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
-                assert data["metadata"]["fallback_reason"] is None
+            with patch("httpx.post", return_value=mock_secured_post):
+                with patch("httpx.put", side_effect=[mock_party_put, mock_epref_put]):
+                    response = client.put(
+                        "/api/v1/profile", headers=headers, json=payload
+                    )
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["address"] == payload["address"]
+                    assert "metadata" in data
+                    assert data["metadata"]["live_sync_available"] is True
+                    assert data["metadata"]["fiserv_sync"] == "LIVE_SUCCESS"
+                    assert data["metadata"]["fallback_reason"] is None
+                    assert data["metadata"]["partial_fiserv_sync"] == [
+                        "sms_notif",
+                        "marketing",
+                    ]
 
-                res_hist = client.get("/api/v1/profile/history", headers=headers)
-                assert res_hist.status_code == 200
-                history = res_hist.json()
-                latest = history[0]
-                assert latest["status"] == "SUCCESS"
-                assert latest["live_sync_available"] is True
+                    res_hist = client.get("/api/v1/profile/history", headers=headers)
+                    assert res_hist.status_code == 200
+                    history = res_hist.json()
+                    latest = history[0]
+                    assert latest["status"] == "SUCCESS"
+                    assert latest["live_sync_available"] is True
+                    assert latest["compensation_details"] == {
+                        "partial_fiserv_sync": ["sms_notif", "marketing"]
+                    }

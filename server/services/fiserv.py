@@ -213,22 +213,20 @@ class FiservMockService(CoreBankingService):
 def _parse_address(raw_address: Any) -> Dict[str, str]:
     if isinstance(raw_address, dict):
         return {
-            "AddressType": raw_address.get("AddressType", "Primary"),
-            "Line1": raw_address.get("Line1", raw_address.get("address", "")),
+            "Addr1": raw_address.get(
+                "Addr1", raw_address.get("Line1", raw_address.get("address", ""))
+            ),
             "City": raw_address.get("City", ""),
-            "State": raw_address.get("State", ""),
+            "StateProv": raw_address.get("StateProv", raw_address.get("State", "")),
             "PostalCode": raw_address.get("PostalCode", ""),
-            "CountryCode": raw_address.get("CountryCode", "USA"),
         }
 
     if not isinstance(raw_address, str) or not raw_address.strip():
         return {
-            "AddressType": "Primary",
-            "Line1": "",
+            "Addr1": "",
             "City": "",
-            "State": "",
+            "StateProv": "",
             "PostalCode": "",
-            "CountryCode": "USA",
         }
 
     parts = [p.strip() for p in raw_address.split(",") if p.strip()]
@@ -239,12 +237,10 @@ def _parse_address(raw_address: Any) -> Dict[str, str]:
         state = state_zip[0] if len(state_zip) >= 1 else ""
         postal_code = state_zip[1] if len(state_zip) >= 2 else ""
         return {
-            "AddressType": "Primary",
-            "Line1": line1,
+            "Addr1": line1,
             "City": city,
-            "State": state,
+            "StateProv": state,
             "PostalCode": postal_code,
-            "CountryCode": "USA",
         }
     elif len(parts) == 2:
         line1 = parts[0]
@@ -253,22 +249,68 @@ def _parse_address(raw_address: Any) -> Dict[str, str]:
         state = rest[1] if len(rest) >= 2 else ""
         postal_code = rest[2] if len(rest) >= 3 else ""
         return {
-            "AddressType": "Primary",
-            "Line1": line1,
+            "Addr1": line1,
             "City": city,
-            "State": state,
+            "StateProv": state,
             "PostalCode": postal_code,
-            "CountryCode": "USA",
         }
     else:
         return {
-            "AddressType": "Primary",
-            "Line1": raw_address.strip(),
+            "Addr1": raw_address.strip(),
             "City": "",
-            "State": "",
+            "StateProv": "",
             "PostalCode": "",
-            "CountryCode": "USA",
         }
+
+
+def _extract_epreference_ident(res_json: dict) -> Optional[str]:
+    if not isinstance(res_json, dict):
+        return None
+
+    status_rec = res_json.get("EPreferenceStatusRec", {})
+    if isinstance(status_rec, dict):
+        keys = status_rec.get("EPreferenceKeys", [])
+        if isinstance(keys, list) and len(keys) > 0 and isinstance(keys[0], dict):
+            ident = keys[0].get("EPreferenceIdent") or keys[0].get("ePreferenceIdent")
+            if ident:
+                return str(ident)
+        elif isinstance(keys, dict):
+            ident = keys.get("EPreferenceIdent") or keys.get("ePreferenceIdent")
+            if ident:
+                return str(ident)
+
+    rec = res_json.get("EPreferenceRec", {})
+    if isinstance(rec, dict):
+        keys = rec.get("EPreferenceKeys", [])
+        if isinstance(keys, list) and len(keys) > 0 and isinstance(keys[0], dict):
+            ident = keys[0].get("EPreferenceIdent") or keys[0].get("ePreferenceIdent")
+            if ident:
+                return str(ident)
+        elif isinstance(keys, dict):
+            ident = keys.get("EPreferenceIdent") or keys.get("ePreferenceIdent")
+            if ident:
+                return str(ident)
+        ident = rec.get("EPreferenceIdent") or rec.get("ePreferenceIdent")
+        if ident:
+            return str(ident)
+
+    top_keys = res_json.get("EPreferenceKeys")
+    if (
+        isinstance(top_keys, list)
+        and len(top_keys) > 0
+        and isinstance(top_keys[0], dict)
+    ):
+        ident = top_keys[0].get("EPreferenceIdent") or top_keys[0].get(
+            "ePreferenceIdent"
+        )
+        if ident:
+            return str(ident)
+    elif isinstance(top_keys, dict):
+        ident = top_keys.get("EPreferenceIdent") or top_keys.get("ePreferenceIdent")
+        if ident:
+            return str(ident)
+
+    return None
 
 
 class FiservLiveService(FiservMockService):
@@ -379,67 +421,6 @@ class FiservLiveService(FiservMockService):
     def update_customer_profile(
         self, cif: str, profile_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        EFX v1 Party API Schema Contract & Integration Specification:
-        -------------------------------------------------------------
-        Endpoint: PUT https://bankinghub-cert.fiservapis.com/banking/efx/v1/partyservice/parties/parties
-
-        Request JSON Schema (EFX v1 Update Party):
-        {
-          "PartyId": "{cif}",
-          "PersonName": {
-            "FirstName": "Jane",
-            "LastName": "Doe"
-          },
-          "Addresses": [
-            {
-              "AddressType": "Primary",
-              "Line1": "123 Main St",
-              "City": "Dallas",
-              "State": "TX",
-              "PostalCode": "75201",
-              "CountryCode": "USA"
-            }
-          ],
-          "PhoneNumbers": [
-            {
-              "PhoneType": "Mobile",
-              "PhoneNumber": "1-555-123-4567"
-            }
-          ],
-          "EmailAddresses": [
-            {
-              "EmailType": "Primary",
-              "EmailAddress": "jane.doe@example.com"
-            }
-          ]
-        }
-
-        Field Mapping Rules:
-        - cif -> PartyId
-        - profile_data["address"] -> parsed via _parse_address() into Addresses[0] (Line1, City, State, PostalCode, CountryCode)
-        - profile_data["phone"] -> PhoneNumbers[0].PhoneNumber
-        - profile_data["email"] -> EmailAddresses[0].EmailAddress
-        - profile["first_name"], profile["last_name"] -> PersonName.FirstName, PersonName.LastName
-
-        Response JSON Schema (HTTP 200 OK):
-        {
-          "PartyId": "{cif}",
-          "Status": {
-            "StatusCode": 0,
-            "Severity": "Info",
-            "StatusDesc": "Party updated successfully"
-          }
-        }
-
-        Entitlement & Authorization Failure Trapping & Fallback Behavior:
-        - Traps HTTP 403 Forbidden / 404 Not Found or business errors where Status.StatusCode != 0
-          (e.g., StatusCode 1120 or 'not entitled'/'not authorized'/'permission' status descriptions).
-        - Emits structured log: '[FISERV_ENTITLEMENT_FALLBACK] Organization ID {org_id} ...'
-        - Sets live_sync_available=False, fallback_reason="ENTITLEMENT_DENIED" (or "BUSINESS_ERROR").
-        - Falls back gracefully to simulated update in memory (inherited from FiservMockService)
-          without throwing 500 or failing user request.
-        """
         profile = self.profiles.get(cif, {})
         previous_state = {
             "address": profile.get("address"),
@@ -447,7 +428,7 @@ class FiservLiveService(FiservMockService):
             "email": profile.get("email"),
         }
 
-        # Update local in-memory profile dictionary first
+        # Update local in-memory profile dictionary
         super().update_customer_profile(cif, profile_data)
 
         url = f"{self.base_url}/partyservice/parties/parties"
@@ -459,24 +440,49 @@ class FiservLiveService(FiservMockService):
         new_email = profile_data.get("email", profile.get("email", ""))
 
         body = {
-            "PartyId": cif,
-            "PersonName": {
-                "FirstName": profile.get("first_name", "Jane"),
-                "LastName": profile.get("last_name", "Doe"),
+            "OvrdAutoAckInd": "true",
+            "PartyKeys": {"PartyId": cif},
+            "PersonPartyInfo": {
+                "PersonData": {
+                    "PersonName": [
+                        {
+                            "NameType": "Primary",
+                            "FamilyName": profile.get("last_name", "Doe"),
+                            "GivenName": profile.get("first_name", "Jane"),
+                            "NameFormat": "None",
+                        }
+                    ],
+                    "Contact": [
+                        {
+                            "PostAddr": {
+                                "Addr1": parsed_addr["Addr1"],
+                                "City": parsed_addr["City"],
+                                "StateProv": parsed_addr["StateProv"],
+                                "PostalCode": parsed_addr["PostalCode"],
+                                "CountryCode": {
+                                    "CountryCodeSource": "SPCountryCode",
+                                    "CountryCodeValue": "10",
+                                },
+                                "AddrType": "Primary",
+                            }
+                        },
+                        {
+                            "Email": {
+                                "EmailType": "Person",
+                                "EmailAddr": new_email,
+                                "PreferredEmail": True,
+                            }
+                        },
+                        {
+                            "PhoneNum": {
+                                "PhoneType": "Mobile",
+                                "Phone": new_phone,
+                                "PreferredPhone": True,
+                            }
+                        },
+                    ],
+                }
             },
-            "Addresses": [parsed_addr],
-            "PhoneNumbers": [
-                {
-                    "PhoneType": "Mobile",
-                    "PhoneNumber": new_phone,
-                }
-            ],
-            "EmailAddresses": [
-                {
-                    "EmailType": "Primary",
-                    "EmailAddress": new_email,
-                }
-            ],
         }
 
         try:
@@ -486,7 +492,7 @@ class FiservLiveService(FiservMockService):
             if status_code != "0":
                 status_desc = status_info.get("StatusDesc", "Business Error")
                 if (
-                    status_code in ("403", "404", "1120")
+                    status_code in ("401", "403", "404", "1120")
                     or "entitle" in status_desc.lower()
                     or "not authorized" in status_desc.lower()
                     or "permission" in status_desc.lower()
@@ -513,10 +519,10 @@ class FiservLiveService(FiservMockService):
             }
 
         except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code if e.response is not None else 0
-            if status_code in (403, 404):
+            code_str = str(e.response.status_code) if e.response is not None else "0"
+            if code_str in ("401", "403", "404"):
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {status_code}). Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {code_str}). Falling back to simulated update."
                 )
                 return {
                     "success": True,
@@ -525,7 +531,7 @@ class FiservLiveService(FiservMockService):
                     "fallback_reason": "ENTITLEMENT_DENIED",
                 }
             print(
-                f"Fiserv live update_customer_profile HTTP status error {status_code}: {str(e)}"
+                f"Fiserv live update_customer_profile HTTP status error {code_str}: {str(e)}"
             )
             raise e
         except (httpx.TimeoutException, httpx.ConnectError) as e:
@@ -535,47 +541,6 @@ class FiservLiveService(FiservMockService):
     def update_communication_preferences(
         self, cif: str, preferences: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        EFX v1 ePreferences API Schema Contract & Integration Specification:
-        --------------------------------------------------------------------
-        Endpoint: PUT https://bankinghub-cert.fiservapis.com/banking/efx/v1/epreferenceservice/epreference/ePreferences
-
-        Request JSON Schema (EFX v1 Update ePreferences):
-        {
-          "PartyId": "{cif}",
-          "EPreferences": {
-            "PaperlessDelivery": true,
-            "EmailAlerts": true,
-            "SMSAlerts": false,
-            "MarketingOptIn": false
-          }
-        }
-
-        Field Mapping Rules:
-        - cif -> PartyId
-        - preferences["paperless"] -> EPreferences.PaperlessDelivery
-        - preferences["email_notif"] -> EPreferences.EmailAlerts
-        - preferences["sms_notif"] -> EPreferences.SMSAlerts
-        - preferences["marketing"] -> EPreferences.MarketingOptIn
-
-        Response JSON Schema (HTTP 200 OK):
-        {
-          "PartyId": "{cif}",
-          "Status": {
-            "StatusCode": 0,
-            "Severity": "Info",
-            "StatusDesc": "ePreferences updated successfully"
-          }
-        }
-
-        Entitlement & Authorization Failure Trapping & Fallback Behavior:
-        - Traps HTTP 403 Forbidden / 404 Not Found or business errors where Status.StatusCode != 0
-          (e.g., StatusCode 1120 or 'not entitled'/'not authorized'/'permission' status descriptions).
-        - Emits structured log: '[FISERV_ENTITLEMENT_FALLBACK] Organization ID {org_id} ...'
-        - Sets live_sync_available=False, fallback_reason="ENTITLEMENT_DENIED" (or "BUSINESS_ERROR").
-        - Falls back gracefully to simulated update in memory (inherited from FiservMockService)
-          without throwing 500 or failing user request.
-        """
         profile = self.profiles.get(cif, {})
         cur_prefs = profile.get("preferences", {})
         previous_state = cur_prefs.copy()
@@ -583,28 +548,172 @@ class FiservLiveService(FiservMockService):
         # Update local in-memory preferences dictionary first
         super().update_communication_preferences(cif, preferences)
 
-        url = f"{self.base_url}/epreferenceservice/epreference/ePreferences"
+        # a) Find customer's DDA checking account ID
+        accounts = self.get_accounts(cif)
+        dda_id = None
+        for acc in accounts:
+            if acc.get("type") == "DDA":
+                dda_id = acc.get("id")
+                break
 
-        updated_prefs = profile.get("preferences", {})
+        if not dda_id and self.accounts_to_query:
+            for item in self.accounts_to_query:
+                if item.get("type") == "DDA":
+                    dda_id = item.get("id")
+                    break
 
-        body = {
-            "PartyId": cif,
-            "EPreferences": {
-                "PaperlessDelivery": updated_prefs.get("paperless", True),
-                "EmailAlerts": updated_prefs.get("email_notif", True),
-                "SMSAlerts": updated_prefs.get("sms_notif", False),
-                "MarketingOptIn": updated_prefs.get("marketing", True),
-            },
-        }
+        if not dda_id:
+            print(
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} - No DDA checking account found for CIF {cif}. Falling back to simulated update."
+            )
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "NO_DDA_ACCOUNT",
+            }
+
+        email = profile.get("email", "test@example.com")
+        paperless = preferences.get("paperless", True)
+        email_notif = preferences.get("email_notif", True)
 
         try:
-            res_json = self._call_with_retry(url, body, method="PUT")
-            status_info = res_json.get("Status", {})
+            # b) Check existing ident via POST /epreferenceservice/epreference/ePreferences/secured
+            secured_url = (
+                f"{self.base_url}/epreferenceservice/epreference/ePreferences/secured"
+            )
+            secured_body = {
+                "EPreferenceSel": {
+                    "AcctKeys": {
+                        "AcctId": dda_id,
+                        "AcctType": "DDA",
+                    }
+                }
+            }
+
+            ident = None
+            try:
+                sec_res = self._call_with_retry(
+                    secured_url, secured_body, method="POST"
+                )
+                status_info = sec_res.get("Status", {})
+                status_code = str(status_info.get("StatusCode", "0"))
+                if status_code == "0":
+                    ident = _extract_epreference_ident(sec_res)
+                elif status_code in ("401", "403", "404", "1120"):
+                    status_desc = status_info.get("StatusDesc", "")
+                    print(
+                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {secured_url} (StatusCode {status_code}: {status_desc}). Falling back to simulated update."
+                    )
+                    return {
+                        "success": True,
+                        "previous_state": previous_state,
+                        "live_sync_available": False,
+                        "fallback_reason": "ENTITLEMENT_DENIED",
+                    }
+            except httpx.HTTPStatusError as e:
+                code_str = (
+                    str(e.response.status_code) if e.response is not None else "0"
+                )
+                if code_str in ("401", "403", "404"):
+                    print(
+                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {secured_url} (HTTP {code_str}). Falling back to simulated update."
+                    )
+                    return {
+                        "success": True,
+                        "previous_state": previous_state,
+                        "live_sync_available": False,
+                        "fallback_reason": "ENTITLEMENT_DENIED",
+                    }
+                raise e
+
+            # c) If no ident found, create ident via POST /epreferenceservice/epreference/ePreferences
+            if not ident:
+                create_url = (
+                    f"{self.base_url}/epreferenceservice/epreference/ePreferences"
+                )
+                create_body = {
+                    "EPreferenceInfo": {
+                        "OverrideException": True,
+                        "AcctKeys": {
+                            "AcctId": dda_id,
+                            "AcctType": "DDA",
+                        },
+                        "DocGroupName": 2,
+                        "StmtPrepCode": 1,
+                        "StmtTruncationOption": 1,
+                    }
+                }
+                create_res = self._call_with_retry(
+                    create_url, create_body, method="POST"
+                )
+                status_info = create_res.get("Status", {})
+                status_code = str(status_info.get("StatusCode", "0"))
+                if status_code != "0":
+                    status_desc = status_info.get("StatusDesc", "Business Error")
+                    if (
+                        status_code in ("401", "403", "404", "1120")
+                        or "entitle" in status_desc.lower()
+                        or "not authorized" in status_desc.lower()
+                        or "permission" in status_desc.lower()
+                    ):
+                        fallback_reason = "ENTITLEMENT_DENIED"
+                    else:
+                        fallback_reason = "BUSINESS_ERROR"
+
+                    print(
+                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {create_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
+                    )
+                    return {
+                        "success": True,
+                        "previous_state": previous_state,
+                        "live_sync_available": False,
+                        "fallback_reason": fallback_reason,
+                    }
+
+                ident = _extract_epreference_ident(create_res)
+
+            if not ident:
+                ident = "default-epref-ident"
+
+            # d) Update preference via PUT /epreferenceservice/epreference/ePreferences
+            put_url = f"{self.base_url}/epreferenceservice/epreference/ePreferences"
+            email_link = (
+                [
+                    {
+                        "Email": {
+                            "EmailType": "Person",
+                            "EmailAddr": email,
+                            "PreferredEmail": True,
+                        }
+                    }
+                ]
+                if email_notif
+                else []
+            )
+
+            put_body = {
+                "OverrideException": True,
+                "EPreferenceKeys": {
+                    "AcctKeys": {
+                        "AcctId": dda_id,
+                        "AcctType": "DDA",
+                    },
+                    "ePreferenceIdent": ident,
+                },
+                "EPreferenceInfo": {
+                    "CombinedStmtInd": paperless,
+                    "EmailLink": email_link,
+                },
+            }
+
+            put_res = self._call_with_retry(put_url, put_body, method="PUT")
+            status_info = put_res.get("Status", {})
             status_code = str(status_info.get("StatusCode", "0"))
             if status_code != "0":
                 status_desc = status_info.get("StatusDesc", "Business Error")
                 if (
-                    status_code in ("403", "404", "1120")
+                    status_code in ("401", "403", "404", "1120")
                     or "entitle" in status_desc.lower()
                     or "not authorized" in status_desc.lower()
                     or "permission" in status_desc.lower()
@@ -614,7 +723,7 @@ class FiservLiveService(FiservMockService):
                     fallback_reason = "BUSINESS_ERROR"
 
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {put_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
                 )
                 return {
                     "success": True,
@@ -628,13 +737,14 @@ class FiservLiveService(FiservMockService):
                 "previous_state": previous_state,
                 "live_sync_available": True,
                 "fallback_reason": None,
+                "partial_fiserv_sync": ["sms_notif", "marketing"],
             }
 
         except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code if e.response is not None else 0
-            if status_code in (403, 404):
+            code_str = str(e.response.status_code) if e.response is not None else "0"
+            if code_str in ("401", "403", "404"):
                 print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint {url} (HTTP {status_code}). Falling back to simulated update."
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} lacks entitlement for endpoint (HTTP {code_str}). Falling back to simulated update."
                 )
                 return {
                     "success": True,
@@ -643,7 +753,7 @@ class FiservLiveService(FiservMockService):
                     "fallback_reason": "ENTITLEMENT_DENIED",
                 }
             print(
-                f"Fiserv live update_communication_preferences HTTP status error {status_code}: {str(e)}"
+                f"Fiserv live update_communication_preferences HTTP status error {code_str}: {str(e)}"
             )
             raise e
         except (httpx.TimeoutException, httpx.ConnectError) as e:

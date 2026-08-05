@@ -412,7 +412,7 @@ def update_profile(
         address=payload.address,
         phone=payload.phone,
         email=payload.email,
-        preferences=payload.preferences.dict(),
+        preferences=payload.preferences.model_dump(),
     )
 
 

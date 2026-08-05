@@ -1302,6 +1302,20 @@
               }
             ],
             "title": "Fallback Reason"
+          },
+          "partial_fiserv_sync": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Fiserv Sync"
           }
         },
         "type": "object",
