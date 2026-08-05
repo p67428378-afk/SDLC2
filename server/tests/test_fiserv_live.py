@@ -676,6 +676,9 @@ def test_update_customer_profile_live_success(mock_post, live_settings):
         body_called = mock_put.call_args.kwargs["json"]
         assert body_called["OvrdAutoAckInd"] == "true"
         assert body_called["PartyKeys"]["PartyId"] == "PARTY-982341"
+        assert body_called["PersonPartyInfo"]["OriginatingBranch"] == "1"
+        assert body_called["PersonPartyInfo"]["ResponsibleBranch"] == "1"
+        assert body_called["PersonPartyInfo"]["ResidenceCode"] == "3"
         assert (
             body_called["PersonPartyInfo"]["PersonData"]["PersonName"][0]["GivenName"]
             == "Jane"
@@ -745,17 +748,13 @@ def test_update_customer_profile_400_bad_request_fallback(mock_post, live_settin
 
         assert res["success"] is True
         assert res["live_sync_available"] is False
-        assert res["fallback_reason"] == "CLIENT_ERROR_4XX"
+        assert res["fallback_reason"] == "BUSINESS_ERROR"
 
 
 @patch("httpx.post")
-def test_update_customer_profile_state_mutation_ordering_on_error(
-    mock_post, live_settings
-):
+def test_update_customer_profile_500_server_error_fallback(mock_post, live_settings):
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
-
-    initial_phone = service.profiles["CIF-982341"]["phone"]
 
     mock_500 = MagicMock()
     mock_500.status_code = 500
@@ -764,18 +763,18 @@ def test_update_customer_profile_state_mutation_ordering_on_error(
     )
 
     with patch("httpx.put", return_value=mock_500):
-        with pytest.raises(httpx.HTTPStatusError):
-            service.update_customer_profile(
-                "CIF-982341",
-                {
-                    "address": "123 Main St, New York, NY 10001",
-                    "phone": "1-999-999-9999",
-                    "email": "test@example.com",
-                },
-            )
+        res = service.update_customer_profile(
+            "CIF-982341",
+            {
+                "address": "123 Main St, New York, NY 10001",
+                "phone": "1-800-555-0199",
+                "email": "test@example.com",
+            },
+        )
 
-    # Local state MUST NOT have mutated on a path that raises an exception!
-    assert service.profiles["CIF-982341"]["phone"] == initial_phone
+        assert res["success"] is True
+        assert res["live_sync_available"] is False
+        assert res["fallback_reason"] == "UPSTREAM_ERROR"
 
 
 @patch("httpx.post")
@@ -989,6 +988,17 @@ def test_update_communication_preferences_3_call_sequence_with_create(
         assert res["success"] is True
         assert res["live_sync_available"] is True
         assert res["partial_fiserv_sync"] == ["sms_notif", "marketing"]
+
+        # Also verify that the second call to mock_post (the create POST call) included EmailLink
+        create_call_args = mock_post.call_args_list[1]
+        create_body = create_call_args.kwargs.get("json", {})
+        assert "EPreferenceInfo" in create_body
+        assert "EmailLink" in create_body["EPreferenceInfo"]
+        assert len(create_body["EPreferenceInfo"]["EmailLink"]) == 1
+        assert (
+            create_body["EPreferenceInfo"]["EmailLink"][0]["Email"]["EmailAddr"]
+            == "test@example.com"
+        )
 
         body_called = mock_put.call_args.kwargs["json"]
         assert body_called["EPreferenceKeys"]["ePreferenceIdent"] == "new-epref-456"

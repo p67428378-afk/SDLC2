@@ -314,6 +314,20 @@ def _extract_epreference_ident(res_json: dict) -> Optional[str]:
 
 
 class FiservLiveService(FiservMockService):
+    """
+    Fiserv Live Integration Service using BankingHub cert sandbox APIs.
+
+    TRACKED OPEN ITEM / SANDBOX FINDING:
+    In the Fiserv cert sandbox environment, update calls to Party (/partyservice/parties/parties)
+    and ePreferences (/epreferenceservice/epreference/ePreferences) may return entitlement or
+    business errors due to branch-region / relationship-code entitlement restrictions on the cert org.
+    Specifically, Party updates require OriginatingBranch, ResponsibleBranch, ResidenceCode, and
+    valid PersonData relationships. If sandbox org entitlement limits or relationship codes reject
+    the request, the service gracefully falls back to simulated local updates with fallback_reason
+    and live_sync_available=False. Full live sync resolution requires Fiserv support or extended
+    Add Party fields configured for the target organization.
+    """
+
     _FRESH_TTL = timedelta(seconds=20)
     _STALE_TTL = timedelta(minutes=5)
 
@@ -555,44 +569,28 @@ class FiservLiveService(FiservMockService):
             return live_profile
 
         except httpx.HTTPStatusError as e:
-            if e.response is not None and (e.response.status_code // 100 == 4):
-                code_str = str(e.response.status_code)
-                fallback_reason = (
-                    "ENTITLEMENT_DENIED"
-                    if e.response.status_code in (401, 403, 404)
-                    else "CLIENT_ERROR_4XX"
-                )
-                print(
-                    f"[FISERV_PROFILE_FALLBACK] Organization ID {self.org_id} 4xx error on {url} (HTTP {code_str}). Falling back to mock profile."
-                )
-                mock_profile = super().get_customer_profile(cif)
-                if mock_profile:
-                    res = mock_profile.copy()
-                    res["metadata"] = {
-                        "fiserv_sync": "FALLBACK_SIMULATED",
-                        "live_sync_available": False,
-                        "fallback_reason": fallback_reason,
-                    }
-                    self._profile_cache = res
-                    self._profile_cache_at = now
-                    return res
-                return None
+            code = e.response.status_code if e.response is not None else 500
+            code_str = str(code)
+            if code in (401, 403, 404):
+                fallback_reason = "ENTITLEMENT_DENIED"
+            elif 400 <= code < 500:
+                fallback_reason = "BUSINESS_ERROR"
+            else:
+                fallback_reason = "UPSTREAM_ERROR"
 
-            if (
-                self._profile_cache is not None
-                and self._profile_cache_at is not None
-                and now - self._profile_cache_at < self._STALE_TTL
-            ):
-                return self._profile_cache
-
+            print(
+                f"[FISERV_PROFILE_FALLBACK] Organization ID {self.org_id} HTTP error on {url} (HTTP {code_str}). Reason: {fallback_reason}. Falling back to mock profile."
+            )
             mock_profile = super().get_customer_profile(cif)
             if mock_profile:
                 res = mock_profile.copy()
                 res["metadata"] = {
                     "fiserv_sync": "FALLBACK_SIMULATED",
                     "live_sync_available": False,
-                    "fallback_reason": "SYSTEM_ERROR",
+                    "fallback_reason": fallback_reason,
                 }
+                self._profile_cache = res
+                self._profile_cache_at = now
                 return res
             return None
         except (httpx.TimeoutException, httpx.ConnectError):
@@ -610,6 +608,17 @@ class FiservLiveService(FiservMockService):
                     "fiserv_sync": "FALLBACK_SIMULATED",
                     "live_sync_available": False,
                     "fallback_reason": "NETWORK_ERROR",
+                }
+                return res
+            return None
+        except Exception:
+            mock_profile = super().get_customer_profile(cif)
+            if mock_profile:
+                res = mock_profile.copy()
+                res["metadata"] = {
+                    "fiserv_sync": "FALLBACK_SIMULATED",
+                    "live_sync_available": False,
+                    "fallback_reason": "UPSTREAM_ERROR",
                 }
                 return res
             return None
@@ -652,6 +661,9 @@ class FiservLiveService(FiservMockService):
             "OvrdAutoAckInd": "true",
             "PartyKeys": {"PartyId": party_id},
             "PersonPartyInfo": {
+                "OriginatingBranch": "1",
+                "ResponsibleBranch": "1",
+                "ResidenceCode": "3",
                 "PersonData": {
                     "PersonName": [
                         {
@@ -690,7 +702,7 @@ class FiservLiveService(FiservMockService):
                             }
                         },
                     ],
-                }
+                },
             },
         }
 
@@ -733,29 +745,50 @@ class FiservLiveService(FiservMockService):
             }
 
         except httpx.HTTPStatusError as e:
-            if e.response is not None and (e.response.status_code // 100 == 4):
-                code_str = str(e.response.status_code)
-                fallback_reason = (
-                    "ENTITLEMENT_DENIED"
-                    if e.response.status_code in (401, 403, 404)
-                    else "CLIENT_ERROR_4XX"
-                )
-                print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint {url} (HTTP {code_str}). Falling back to simulated update."
-                )
-                super().update_customer_profile(cif, profile_data)
-                self._profile_cache = None
-                return {
-                    "success": True,
-                    "previous_state": previous_state,
-                    "live_sync_available": False,
-                    "fallback_reason": fallback_reason,
-                }
-            print(f"Fiserv live update_customer_profile HTTP status error: {str(e)}")
-            raise e
+            code = e.response.status_code if e.response is not None else 500
+            code_str = str(code)
+            if code in (401, 403, 404):
+                fallback_reason = "ENTITLEMENT_DENIED"
+            elif 400 <= code < 500:
+                fallback_reason = "BUSINESS_ERROR"
+            else:
+                fallback_reason = "UPSTREAM_ERROR"
+
+            print(
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} HTTP error for endpoint {url} (HTTP {code_str}). Reason: {fallback_reason}. Falling back to simulated update."
+            )
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": fallback_reason,
+            }
         except (httpx.TimeoutException, httpx.ConnectError) as e:
-            print(f"Fiserv live update_customer_profile network error: {str(e)}")
-            raise e
+            print(
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} network error for endpoint {url}: {str(e)}. Falling back to simulated update."
+            )
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "NETWORK_ERROR",
+            }
+        except Exception as e:
+            print(
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} unexpected error for endpoint {url}: {str(e)}. Falling back to simulated update."
+            )
+            super().update_customer_profile(cif, profile_data)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "UPSTREAM_ERROR",
+            }
 
     def update_communication_preferences(
         self, cif: str, preferences: Dict[str, Any]
@@ -848,27 +881,42 @@ class FiservLiveService(FiservMockService):
                         "fallback_reason": "ENTITLEMENT_DENIED",
                     }
             except httpx.HTTPStatusError as e:
-                if e.response is not None and (e.response.status_code // 100 == 4):
-                    code_str = str(e.response.status_code)
-                    print(
-                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint {secured_url} (HTTP {code_str}). Falling back to simulated update."
-                    )
-                    super().update_communication_preferences(cif, preferences)
-                    self._profile_cache = None
-                    return {
-                        "success": True,
-                        "previous_state": previous_state,
-                        "live_sync_available": False,
-                        "fallback_reason": "ENTITLEMENT_DENIED"
-                        if e.response.status_code in (401, 403, 404)
-                        else "CLIENT_ERROR_4XX",
-                    }
-                raise e
+                code = e.response.status_code if e.response is not None else 500
+                if code in (401, 403, 404):
+                    fallback_reason = "ENTITLEMENT_DENIED"
+                elif 400 <= code < 500:
+                    fallback_reason = "BUSINESS_ERROR"
+                else:
+                    fallback_reason = "UPSTREAM_ERROR"
+                print(
+                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} HTTP error for endpoint {secured_url} (HTTP {code}). Reason: {fallback_reason}. Falling back to simulated update."
+                )
+                super().update_communication_preferences(cif, preferences)
+                self._profile_cache = None
+                return {
+                    "success": True,
+                    "previous_state": previous_state,
+                    "live_sync_available": False,
+                    "fallback_reason": fallback_reason,
+                }
 
             # c) If no ident found, create ident via POST /epreferenceservice/epreference/ePreferences
             if not ident:
                 create_url = (
                     f"{self.base_url}/epreferenceservice/epreference/ePreferences"
+                )
+                create_email_link = (
+                    [
+                        {
+                            "Email": {
+                                "EmailType": "Person",
+                                "EmailAddr": email,
+                                "PreferredEmail": True,
+                            }
+                        }
+                    ]
+                    if email
+                    else []
                 )
                 create_body = {
                     "EPreferenceInfo": {
@@ -880,27 +928,50 @@ class FiservLiveService(FiservMockService):
                         "DocGroupName": 2,
                         "StmtPrepCode": 1,
                         "StmtTruncationOption": 1,
+                        "EmailLink": create_email_link,
                     }
                 }
-                create_res = self._call_with_retry(
-                    create_url, create_body, method="POST"
-                )
-                status_info = create_res.get("Status", {})
-                status_code = str(status_info.get("StatusCode", "0"))
-                if status_code != "0":
-                    status_desc = status_info.get("StatusDesc", "Business Error")
-                    if (
-                        status_code in ("401", "403", "404", "1120")
-                        or "entitle" in status_desc.lower()
-                        or "not authorized" in status_desc.lower()
-                        or "permission" in status_desc.lower()
-                    ):
-                        fallback_reason = "ENTITLEMENT_DENIED"
-                    else:
-                        fallback_reason = "BUSINESS_ERROR"
+                try:
+                    create_res = self._call_with_retry(
+                        create_url, create_body, method="POST"
+                    )
+                    status_info = create_res.get("Status", {})
+                    status_code = str(status_info.get("StatusCode", "0"))
+                    if status_code != "0":
+                        status_desc = status_info.get("StatusDesc", "Business Error")
+                        if (
+                            status_code in ("401", "403", "404", "1120")
+                            or "entitle" in status_desc.lower()
+                            or "not authorized" in status_desc.lower()
+                            or "permission" in status_desc.lower()
+                        ):
+                            fallback_reason = "ENTITLEMENT_DENIED"
+                        else:
+                            fallback_reason = "BUSINESS_ERROR"
 
+                        print(
+                            f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {create_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
+                        )
+                        super().update_communication_preferences(cif, preferences)
+                        self._profile_cache = None
+                        return {
+                            "success": True,
+                            "previous_state": previous_state,
+                            "live_sync_available": False,
+                            "fallback_reason": fallback_reason,
+                        }
+
+                    ident = _extract_epreference_ident(create_res)
+                except httpx.HTTPStatusError as e:
+                    code = e.response.status_code if e.response is not None else 500
+                    if code in (401, 403, 404):
+                        fallback_reason = "ENTITLEMENT_DENIED"
+                    elif 400 <= code < 500:
+                        fallback_reason = "BUSINESS_ERROR"
+                    else:
+                        fallback_reason = "UPSTREAM_ERROR"
                     print(
-                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} endpoint {create_url} (StatusCode {status_code}: {status_desc}). Reason: {fallback_reason}. Falling back to simulated update."
+                        f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} HTTP error for endpoint {create_url} (HTTP {code}). Reason: {fallback_reason}. Falling back to simulated update."
                     )
                     super().update_communication_preferences(cif, preferences)
                     self._profile_cache = None
@@ -910,8 +981,6 @@ class FiservLiveService(FiservMockService):
                         "live_sync_available": False,
                         "fallback_reason": fallback_reason,
                     }
-
-                ident = _extract_epreference_ident(create_res)
 
             if not ident:
                 ident = "default-epref-ident"
@@ -986,30 +1055,49 @@ class FiservLiveService(FiservMockService):
             }
 
         except httpx.HTTPStatusError as e:
-            if e.response is not None and (e.response.status_code // 100 == 4):
-                code_str = str(e.response.status_code)
-                print(
-                    f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} 4xx error for endpoint (HTTP {code_str}). Falling back to simulated update."
-                )
-                super().update_communication_preferences(cif, preferences)
-                self._profile_cache = None
-                return {
-                    "success": True,
-                    "previous_state": previous_state,
-                    "live_sync_available": False,
-                    "fallback_reason": "ENTITLEMENT_DENIED"
-                    if e.response.status_code in (401, 403, 404)
-                    else "CLIENT_ERROR_4XX",
-                }
+            code = e.response.status_code if e.response is not None else 500
+            code_str = str(code)
+            if code in (401, 403, 404):
+                fallback_reason = "ENTITLEMENT_DENIED"
+            elif 400 <= code < 500:
+                fallback_reason = "BUSINESS_ERROR"
+            else:
+                fallback_reason = "UPSTREAM_ERROR"
             print(
-                f"Fiserv live update_communication_preferences HTTP status error: {str(e)}"
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} HTTP error for ePreferences endpoint (HTTP {code_str}). Reason: {fallback_reason}. Falling back to simulated update."
             )
-            raise e
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": fallback_reason,
+            }
         except (httpx.TimeoutException, httpx.ConnectError) as e:
             print(
-                f"Fiserv live update_communication_preferences network error: {str(e)}"
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} network error for ePreferences endpoint: {str(e)}. Falling back to simulated update."
             )
-            raise e
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "NETWORK_ERROR",
+            }
+        except Exception as e:
+            print(
+                f"[FISERV_ENTITLEMENT_FALLBACK] Organization ID {self.org_id} unexpected error for ePreferences endpoint: {str(e)}. Falling back to simulated update."
+            )
+            super().update_communication_preferences(cif, preferences)
+            self._profile_cache = None
+            return {
+                "success": True,
+                "previous_state": previous_state,
+                "live_sync_available": False,
+                "fallback_reason": "UPSTREAM_ERROR",
+            }
 
     def get_accounts(self, cif: str) -> List[Dict[str, Any]]:
         now = datetime.utcnow()

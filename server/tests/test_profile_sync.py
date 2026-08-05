@@ -204,6 +204,71 @@ def test_profile_update_live_mode_entitlement_fallback(client):
                 assert latest["live_sync_available"] is False
 
 
+def test_profile_update_live_mode_400_bad_request_fallback(client):
+    headers = get_auth_headers(client)
+
+    payload = {
+        "address": "100 Financial Plaza, Dallas, TX 75201",
+        "phone": "214-555-0199",
+        "email": "live_fallback@example.com",
+        "preferences": {
+            "paperless": True,
+            "email_notif": True,
+            "sms_notif": False,
+            "marketing": True,
+        },
+    }
+
+    mock_400 = MagicMock()
+    mock_400.status_code = 400
+    mock_400.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Bad Request", request=MagicMock(), response=mock_400
+    )
+
+    from server.main import profile_sync_service
+    from server.config import Settings
+
+    live_settings = Settings(
+        FISERV_MODE="live",
+        FISERV_API_KEY="key",
+        FISERV_API_SECRET="secret",
+        FISERV_TOKEN_URL="https://bankinghub-cert.fiservapis.com/fts-apim/oauth2/v2",
+        FISERV_BASE_URL="https://bankinghub-cert.fiservapis.com/banking/efx/v1",
+        FISERV_ORG_ID="999990301",
+        FISERV_PARTY_ID="PARTY-982341",
+        FISERV_DEMO_ACCOUNTS="5041733:DDA",
+    )
+    live_service = FiservLiveService(live_settings)
+    live_service._accounts_cache = [
+        {
+            "id": "5041733",
+            "name": "Primary Checking",
+            "type": "DDA",
+            "balance": 1000.0,
+            "status": "Active",
+        }
+    ]
+
+    with patch.object(profile_sync_service, "fiserv_service", live_service):
+        with patch.object(live_service, "_get_token", return_value="mock-token"):
+            with patch("httpx.put", side_effect=[mock_400, mock_400]):
+                response = client.put("/api/v1/profile", headers=headers, json=payload)
+                assert response.status_code == 200
+                data = response.json()
+                assert data["address"] == payload["address"]
+                assert "metadata" in data
+                assert data["metadata"]["live_sync_available"] is False
+                assert data["metadata"]["fiserv_sync"] == "FALLBACK_SIMULATED"
+                assert data["metadata"]["fallback_reason"] == "BUSINESS_ERROR"
+
+                res_hist = client.get("/api/v1/profile/history", headers=headers)
+                assert res_hist.status_code == 200
+                history = res_hist.json()
+                latest = history[0]
+                assert latest["status"] == "FALLBACK_SIMULATED"
+                assert latest["live_sync_available"] is False
+
+
 def test_profile_update_live_mode_party_id_not_configured_fallback(client):
     headers = get_auth_headers(client)
 
