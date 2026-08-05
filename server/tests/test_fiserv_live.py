@@ -1,4 +1,5 @@
 import pytest
+import json
 import httpx
 from unittest.mock import patch, MagicMock
 from server.config import Settings
@@ -103,6 +104,71 @@ def test_token_refresh_on_401(mock_post, live_settings):
     res = service._make_api_call("https://example.com/api", {"test": True})
     assert res == {"Status": {"StatusCode": "0"}}
     assert service._token == "new-token"
+
+
+@patch("httpx.post")
+def test_get_accounts_success(mock_post, live_settings):
+    service = FiservLiveService(live_settings)
+
+    mock_token_resp = MagicMock()
+    mock_token_resp.status_code = 200
+    mock_token_resp.json.return_value = {
+        "access_token": "mock-access-token",
+        "expires_in": 3600,
+    }
+
+    mock_acct_resp = MagicMock()
+    mock_acct_resp.status_code = 200
+    mock_acct_resp.json.return_value = {
+        "Status": {
+            "StatusCode": "0",
+            "StatusDesc": "Success",
+            "Severity": "Info",
+        },
+        "AcctRec": {
+            "DepositAcctInfo": {
+                "AcctDtlStatus": "Active",
+                "Nickname": "Primary Checking",
+                "Rate": "0.05",
+                "AcctBal": [{"BalType": "Current", "CurAmt": {"Amt": 12450.00}}],
+            }
+        },
+    }
+
+    mock_post.side_effect = [
+        mock_token_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+        mock_acct_resp,
+    ]
+
+    accounts = service.get_accounts("CIF-982341")
+    assert len(accounts) == 3
+    assert accounts[0]["id"] == "5041733"
+    assert accounts[0]["balance"] == 12450.00
+
+    assert mock_post.call_count == 4
+
+    acct_call_args = mock_post.call_args_list[1]
+    url_called = acct_call_args[0][0]
+    assert (
+        url_called
+        == "https://bankinghub-cert.fiservapis.com/banking/efx/v1/acctservice/acctmgmt/accounts/secured"
+    )
+
+    headers_called = acct_call_args.kwargs.get("headers", {})
+    assert "Authorization" in headers_called
+    assert headers_called["Authorization"] == "Bearer mock-access-token"
+    assert "EFXHeader" in headers_called
+    efx_header = json.loads(headers_called["EFXHeader"])
+    assert efx_header["OrganizationId"] == "999990301"
+    assert "TrnId" in efx_header
+
+    json_body = acct_call_args.kwargs.get("json", {})
+    assert "AcctSel" in json_body
+    assert "AcctKeys" in json_body["AcctSel"]
+    assert json_body["AcctSel"]["AcctKeys"]["AcctId"] == "5041733"
+    assert json_body["AcctSel"]["AcctKeys"]["AcctType"] == "DDA"
 
 
 @patch("httpx.post")
