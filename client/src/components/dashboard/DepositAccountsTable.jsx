@@ -19,6 +19,12 @@ export default function DepositAccountsTable({ accounts, onAccountClick }) {
               <th className="py-3 px-6 font-label-sm text-secondary font-medium">
                 Account Number
               </th>
+              <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                Interest Rate
+              </th>
+              <th className="py-3 px-6 font-label-sm text-secondary font-medium">
+                Status
+              </th>
               <th className="py-3 px-6 font-label-sm text-secondary font-medium text-right">
                 Balance
               </th>
@@ -41,6 +47,14 @@ export default function DepositAccountsTable({ accounts, onAccountClick }) {
                   <td className="py-4 px-6 font-mono text-secondary">
                     •••• {account.account_number.slice(-4)}
                   </td>
+                  <td className="py-4 px-6 text-secondary">
+                    {account.interest_rate}%
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
+                      {account.status}
+                    </span>
+                  </td>
                   <td className="py-4 px-6 text-right font-medium">
                     $
                     {account.balance.toLocaleString("en-US", {
@@ -52,7 +66,7 @@ export default function DepositAccountsTable({ accounts, onAccountClick }) {
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="py-8 text-center text-secondary">
+                <td colSpan="6" className="py-8 text-center text-secondary">
                   No deposit accounts found.
                 </td>
               </tr>
