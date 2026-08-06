@@ -899,9 +899,7 @@ def test_merge_contact_updates_preserves_other_records():
 
 
 @patch("httpx.post")
-def test_update_customer_profile_aborts_when_party_read_fails(
-    mock_post, live_settings
-):
+def test_update_customer_profile_aborts_when_party_read_fails(mock_post, live_settings):
     """A failed contact read must not trigger a partial (destructive) write."""
     service = FiservLiveService(live_settings)
     service._token = "mock-token"
