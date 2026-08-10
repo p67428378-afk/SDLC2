@@ -1,26 +1,26 @@
 # Frontend Client - Indigo Banking
 
-React + Vite + Tailwind CSS frontend for Toyota Financial Services / Indigo Banking.
+React + Vite + Tailwind CSS frontend for A Banking Company / Indigo Banking.
 
 ## Setup & Running Locally
 
 1. Install dependencies:
 
-   ```bash
-   cd client
-   npm install
-   ```
+    ```bash
+    cd client
+    npm install
+    ```
 
 2. Start development server:
 
-   ```bash
-   npm run dev
-   ```
+    ```bash
+    npm run dev
+    ```
 
 3. Run tests:
-   ```bash
-   npm test
-   ```
+    ```bash
+    npm test
+    ```
 
 ## Environment Variables
 

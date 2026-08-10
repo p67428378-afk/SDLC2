@@ -6,33 +6,33 @@ import Sidebar from "./Sidebar";
 
 // Mock authService
 vi.mock("../../services/api", () => ({
-  authService: {
-    logout: vi.fn(),
-  },
+    authService: {
+        logout: vi.fn(),
+    },
 }));
 
 describe("Sidebar", () => {
-  it("renders navigation links correctly", () => {
-    const mockProfile = {
-      first_name: "Jane",
-      last_name: "Doe",
-      cif: "CIF-982341",
-    };
+    it("renders navigation links correctly", () => {
+        const mockProfile = {
+            first_name: "Jane",
+            last_name: "Doe",
+            cif: "CIF-982341",
+        };
 
-    render(
-      <MemoryRouter>
-        <Sidebar userProfile={mockProfile} />
-      </MemoryRouter>,
-    );
+        render(
+            <MemoryRouter>
+                <Sidebar userProfile={mockProfile} />
+            </MemoryRouter>,
+        );
 
-    expect(screen.getByText("TFS")).toBeInTheDocument();
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Account Summary")).toBeInTheDocument();
-    expect(screen.getByText("Relationship Overview")).toBeInTheDocument();
-    expect(screen.getByText("Account Details")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled Payments")).toBeInTheDocument();
-    expect(screen.getByText("Profile Settings")).toBeInTheDocument();
-    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
-    expect(screen.getByText("CIF-982341")).toBeInTheDocument();
-  });
+        expect(screen.getByText("ABC")).toBeInTheDocument();
+        expect(screen.getByText("Dashboard")).toBeInTheDocument();
+        expect(screen.getByText("Account Summary")).toBeInTheDocument();
+        expect(screen.getByText("Relationship Overview")).toBeInTheDocument();
+        expect(screen.getByText("Account Details")).toBeInTheDocument();
+        expect(screen.getByText("Scheduled Payments")).toBeInTheDocument();
+        expect(screen.getByText("Profile Settings")).toBeInTheDocument();
+        expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+        expect(screen.getByText("CIF-982341")).toBeInTheDocument();
+    });
 });
