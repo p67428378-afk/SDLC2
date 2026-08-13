@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Sidebar() {
+export default function Sidebar({ currentPage, setCurrentPage }) {
   return (
     <aside className="hidden md:flex fixed left-0 top-0 h-screen w-[260px] bg-surface-container border-r border-outline-variant flex-col p-md z-20">
       <div className="flex items-center gap-3 mb-xl">
@@ -20,28 +20,46 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 space-y-sm">
         <a
-          className="flex items-center gap-3 px-3 py-2 bg-primary-container text-on-primary-container font-bold rounded-lg transition-transform duration-150 scale-95 origin-left shadow-[inset_4px_0_0_0_#4edea3]"
+          onClick={(e) => {
+            e.preventDefault();
+            setCurrentPage("dashboard");
+          }}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 ${
+            currentPage === "dashboard"
+              ? "bg-primary-container text-on-primary-container font-bold scale-95 origin-left shadow-[inset_4px_0_0_0_#4edea3]"
+              : "text-on-surface-variant hover:text-on-surface hover:bg-secondary-container"
+          }`}
           href="#"
         >
           <span className="material-symbols-outlined filled">dashboard</span>
           Dashboard
         </a>
         <a
-          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-colors rounded-lg"
+          onClick={(e) => e.preventDefault()}
+          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-colors rounded-lg opacity-50 cursor-not-allowed"
           href="#"
         >
           <span className="material-symbols-outlined">history</span>
           History
         </a>
         <a
-          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-colors rounded-lg"
+          onClick={(e) => e.preventDefault()}
+          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-colors rounded-lg opacity-50 cursor-not-allowed"
           href="#"
         >
           <span className="material-symbols-outlined">analytics</span>
           Analytics
         </a>
         <a
-          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-secondary-container transition-colors rounded-lg"
+          onClick={(e) => {
+            e.preventDefault();
+            setCurrentPage("settings");
+          }}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 ${
+            currentPage === "settings"
+              ? "bg-primary-container text-on-primary-container font-bold scale-95 origin-left shadow-[inset_4px_0_0_0_#4edea3]"
+              : "text-on-surface-variant hover:text-on-surface hover:bg-secondary-container"
+          }`}
           href="#"
         >
           <span className="material-symbols-outlined">settings</span>

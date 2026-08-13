@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Header() {
+export default function Header({ currentPage }) {
   const today = new Date();
   const options = {
     weekday: "long",
@@ -14,7 +14,7 @@ export default function Header() {
     <header className="fixed top-0 right-0 w-full md:w-[calc(100%-260px)] bg-surface border-b border-outline-variant h-16 px-margin-mobile md:px-margin-desktop flex justify-between items-center z-10">
       <div className="flex flex-col">
         <h2 className="font-headline-md text-headline-md font-semibold text-on-surface">
-          Time Tracker
+          {currentPage === "settings" ? "Settings" : "Time Tracker"}
         </h2>
         <p className="font-label-sm text-label-sm text-on-surface-variant">
           {formattedDate}

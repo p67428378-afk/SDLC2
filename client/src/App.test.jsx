@@ -11,6 +11,21 @@ vi.mock("./services/api.js", () => ({
   listTimeEntries: vi.fn(() => Promise.resolve([])),
   createTimeEntry: vi.fn(() => Promise.resolve({})),
   deleteTimeEntry: vi.fn(() => Promise.resolve({})),
+  getUserProfile: vi.fn(() =>
+    Promise.resolve({
+      id: "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6",
+      email: "user@example.com",
+      preferences: { dark_mode: false },
+    }),
+  ),
+  updateUserPreferences: vi.fn(() =>
+    Promise.resolve({
+      id: "pref-id",
+      user_id: "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6",
+      dark_mode: false,
+      updated_at: "2026-08-13T11:20:10.789987+00:00",
+    }),
+  ),
 }));
 
 describe("App Smoke Test", () => {

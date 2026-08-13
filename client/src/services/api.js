@@ -29,4 +29,14 @@ export const deleteTimeEntry = async (entryId) => {
   return response.data;
 };
 
+export const getUserProfile = async () => {
+  const response = await api.get("/api/v1/users/me");
+  return response.data;
+};
+
+export const updateUserPreferences = async (preferences) => {
+  const response = await api.patch("/api/v1/users/me/preferences", preferences);
+  return response.data;
+};
+
 export default api;
