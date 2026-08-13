@@ -39,3 +39,31 @@ class DailySummaryResponse(BaseModel):
     total_duration_seconds: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# User Preferences Schemas
+class UserPreferenceUpdate(BaseModel):
+    dark_mode: bool
+
+
+class UserPreferenceResponse(BaseModel):
+    id: str
+    user_id: str
+    dark_mode: bool
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserPreferencesSummary(BaseModel):
+    dark_mode: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    preferences: Optional[UserPreferencesSummary] = None
+
+    model_config = ConfigDict(from_attributes=True)

@@ -3,7 +3,7 @@ from datetime import datetime, timezone, date
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from server.models import TimeEntry
+from server.models import TimeEntry, User, UserPreference
 from server.schemas import TimeEntryCreate, TimeEntryType
 
 
@@ -160,3 +160,33 @@ def delete_time_entry(db: Session, entry_id: str) -> bool:
         db.delete(entry)
         return True
     return False
+
+
+# User and Preferences CRUD
+def get_or_create_default_user(db: Session) -> User:
+    default_id = "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"
+    user = db.query(User).filter(User.id == default_id).first()
+    if not user:
+        user = User(id=default_id, email="user@example.com")
+        db.add(user)
+        db.flush()
+
+        # Create default preferences
+        pref = UserPreference(user_id=default_id, dark_mode=False)
+        db.add(pref)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def update_user_preferences(db: Session, user_id: str, dark_mode: bool) -> UserPreference:
+    pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
+    if not pref:
+        pref = UserPreference(user_id=user_id, dark_mode=dark_mode)
+        db.add(pref)
+    else:
+        pref.dark_mode = dark_mode
+        pref.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(pref)
+    return pref

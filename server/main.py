@@ -2,17 +2,26 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from server.database import get_db, init_db
-from server.schemas import TimeEntryCreate, TimeEntryResponse, DailySummaryResponse
+from server.schemas import (
+    TimeEntryCreate,
+    TimeEntryResponse,
+    DailySummaryResponse,
+    UserResponse,
+    UserPreferenceResponse,
+    UserPreferenceUpdate,
+)
 from server.crud import (
     create_time_entry,
     get_time_entries,
     get_today_time_entries,
     delete_time_entry,
+    get_or_create_default_user,
+    update_user_preferences,
 )
 
 
@@ -20,6 +29,13 @@ from server.crud import (
 async def lifespan(app: FastAPI):
     # Initialize database schema
     init_db()
+    # Seed default user
+    from server.database import SessionLocal
+    db = SessionLocal()
+    try:
+        get_or_create_default_user(db)
+    finally:
+        db.close()
     yield
 
 
@@ -41,6 +57,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Mock Authentication Dependency
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    if authorization == "Bearer unauthorized":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized"
+        )
+    return get_or_create_default_user(db)
 
 
 @app.get("/health", response_model=dict, status_code=status.HTTP_200_OK)
@@ -120,4 +149,34 @@ def delete_entry(entry_id: str, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+# User Preferences Endpoints
+@app.get(
+    "/api/v1/users/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_me(current_user=Depends(get_current_user)):
+    return current_user
+
+
+@app.patch(
+    "/api/v1/users/me/preferences",
+    response_model=UserPreferenceResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_preferences(
+    pref_in: UserPreferenceUpdate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        pref = update_user_preferences(db, current_user.id, pref_in.dark_mode)
+        return pref
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update preferences: {str(e)}",
         )
