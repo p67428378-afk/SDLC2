@@ -47,7 +47,7 @@ def parse_duration_string(duration_str: str) -> int:
     # Match seconds
     seconds_match = re.search(r"(\d+(?:\.\d+)?)\s*s", duration_str)
     if seconds_match:
-        total_seconds += float(seconds_match.group(1))
+        total_seconds += float(seconds_match.group(1)) * 1
         found = True
 
     if not found:
@@ -91,10 +91,13 @@ def create_time_entry(db: Session, entry_in: TimeEntryCreate) -> TimeEntry:
             if end < start:
                 raise ValueError("ended_at cannot be before started_at")
             db_entry.duration_seconds = int((end - start).total_seconds())
+            db_entry.duration_minutes = int(db_entry.duration_seconds / 60)
         elif entry_in.duration_seconds is not None:
             db_entry.duration_seconds = entry_in.duration_seconds
+            db_entry.duration_minutes = int(entry_in.duration_seconds / 60)
         elif entry_in.duration_string:
             db_entry.duration_seconds = parse_duration_string(entry_in.duration_string)
+            db_entry.duration_minutes = int(db_entry.duration_seconds / 60)
 
         db_entry.updated_at = datetime.now(timezone.utc)
         return db_entry
@@ -121,11 +124,15 @@ def create_time_entry(db: Session, entry_in: TimeEntryCreate) -> TimeEntry:
 
     db_entry = TimeEntry(
         type=entry_in.type.value,
+        entry_type="TIMER" if entry_in.type.value == "timed" else "MANUAL",
         description=entry_in.description,
         duration_seconds=duration_seconds,
+        duration_minutes=int(duration_seconds / 60),
         logged_date=logged_date,
         started_at=entry_in.started_at,
         ended_at=entry_in.ended_at,
+        start_time=entry_in.started_at,
+        end_time=entry_in.ended_at,
     )
     db.add(db_entry)
     return db_entry
@@ -172,21 +179,157 @@ def get_or_create_default_user(db: Session) -> User:
         db.flush()
 
         # Create default preferences
-        pref = UserPreference(user_id=default_id, dark_mode=False)
+        pref = UserPreference(user_id=default_id, dark_mode=False, theme_mode="light")
         db.add(pref)
         db.commit()
         db.refresh(user)
     return user
 
 
-def update_user_preferences(db: Session, user_id: str, dark_mode: bool) -> UserPreference:
+def update_user_preferences(
+    db: Session, user_id: str, dark_mode: bool
+) -> UserPreference:
     pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
     if not pref:
-        pref = UserPreference(user_id=user_id, dark_mode=dark_mode)
+        pref = UserPreference(
+            user_id=user_id,
+            dark_mode=dark_mode,
+            theme_mode="dark" if dark_mode else "light",
+        )
         db.add(pref)
     else:
         pref.dark_mode = dark_mode
+        pref.theme_mode = "dark" if dark_mode else "light"
         pref.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(pref)
+    return pref
+
+
+# --- NEW WORKSPEC CRUD OPERATIONS ---
+
+
+def start_timer_new(
+    db: Session, user_id: str, description: Optional[str] = None
+) -> TimeEntry:
+    now = datetime.now(timezone.utc)
+    db_entry = TimeEntry(
+        user_id=user_id,
+        entry_type="TIMER",
+        description=description,
+        start_time=now,
+        duration_minutes=0,
+        # Old columns for compatibility
+        type="timed",
+        duration_seconds=0,
+        logged_date=now.date(),
+        started_at=now,
+    )
+    db.add(db_entry)
+    db.commit()
+    db.refresh(db_entry)
+    return db_entry
+
+
+def stop_timer_new(db: Session, user_id: str, timer_id: str) -> TimeEntry:
+    db_entry = (
+        db.query(TimeEntry)
+        .filter(and_(TimeEntry.id == timer_id, TimeEntry.user_id == user_id))
+        .first()
+    )
+    if not db_entry:
+        raise ValueError("Timer not found")
+    if db_entry.end_time is not None:
+        raise ValueError("Timer already stopped")
+
+    now = datetime.now(timezone.utc)
+    db_entry.end_time = now
+    db_entry.ended_at = now
+
+    # Calculate duration
+    start = ensure_utc(db_entry.start_time)
+    end = ensure_utc(now)
+    elapsed_seconds = int((end - start).total_seconds())
+    db_entry.duration_seconds = elapsed_seconds
+    db_entry.duration_minutes = int(elapsed_seconds / 60)
+
+    db_entry.updated_at = now
+    db.commit()
+    db.refresh(db_entry)
+    return db_entry
+
+
+def create_manual_entry_new(
+    db: Session, user_id: str, description: str, duration_minutes: int, entry_date: date
+) -> TimeEntry:
+    db_entry = TimeEntry(
+        user_id=user_id,
+        entry_type="MANUAL",
+        description=description,
+        duration_minutes=duration_minutes,
+        logged_date=entry_date,
+        # Old columns for compatibility
+        type="manual",
+        duration_seconds=duration_minutes * 60,
+    )
+    db.add(db_entry)
+    db.commit()
+    db.refresh(db_entry)
+    return db_entry
+
+
+def get_daily_summary_new(db: Session, user_id: str) -> dict:
+    today = datetime.now(timezone.utc).date()
+    # Fetch entries logged for today
+    entries = (
+        db.query(TimeEntry)
+        .filter(and_(TimeEntry.user_id == user_id, TimeEntry.logged_date == today))
+        .order_by(TimeEntry.created_at.desc())
+        .all()
+    )
+
+    total_minutes = 0
+    for entry in entries:
+        if entry.entry_type == "TIMER" and entry.end_time is None:
+            # Running timer: calculate real-time total running hours
+            start = ensure_utc(entry.start_time)
+            now = datetime.now(timezone.utc)
+            elapsed_seconds = int((now - start).total_seconds())
+            total_minutes += int(elapsed_seconds / 60)
+        else:
+            total_minutes += entry.duration_minutes
+
+    # Format total as "Xh Ym"
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    formatted_total = f"{hours}h {minutes}m"
+
+    return {
+        "entries": entries,
+        "formatted_total": formatted_total,
+        "total_minutes": total_minutes,
+    }
+
+
+def update_user_preferences_new(
+    db: Session, user_id: str, dark_mode: bool
+) -> UserPreference:
+    pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).first()
+    theme_mode = "dark" if dark_mode else "light"
+    now = datetime.now(timezone.utc)
+    if not pref:
+        pref = UserPreference(
+            user_id=user_id,
+            theme_mode=theme_mode,
+            dark_mode=dark_mode,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(pref)
+    else:
+        pref.theme_mode = theme_mode
+        pref.dark_mode = dark_mode
+        pref.updated_at = now
     db.commit()
     db.refresh(pref)
     return pref

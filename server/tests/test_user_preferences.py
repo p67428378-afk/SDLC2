@@ -57,3 +57,27 @@ def test_invalid_request_body(client):
         json={"invalid_field": "value"},
     )
     assert response.status_code == 422
+
+
+# --- NEW WORKSPEC ENDPOINT TESTS ---
+
+
+def test_new_update_preferences_put(client):
+    # 1. Update dark_mode to True using PUT
+    response = client.put(
+        "/api/v1/users/me/preferences",
+        json={"dark_mode": True},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dark_mode"] is True
+    assert "updated_at" in data
+
+    # 2. Update dark_mode to False using PUT
+    response_false = client.put(
+        "/api/v1/users/me/preferences",
+        json={"dark_mode": False},
+    )
+    assert response_false.status_code == 200
+    data_false = response_false.json()
+    assert data_false["dark_mode"] is False

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 
 
 def test_start_and_stop_timer(client):
@@ -180,3 +180,77 @@ def test_delete_nonexistent_entry(client):
     response = client.delete("/api/v1/time-entries/nonexistent-id")
     assert response.status_code == 404
     assert "Entry not found" in response.json()["detail"]
+
+
+# --- NEW WORKSPEC ENDPOINT TESTS ---
+
+
+def test_new_timer_lifecycle(client):
+    # 1. Start timer
+    response = client.post(
+        "/api/v1/time-entries/start",
+        json={"description": "New automated timer"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "RUNNING"
+    assert "timer_id" in data
+    assert "start_time" in data
+    timer_id = data["timer_id"]
+
+    # 2. Stop timer
+    response_stop = client.post(
+        "/api/v1/time-entries/stop",
+        json={"timer_id": timer_id},
+    )
+    assert response_stop.status_code == 200
+    data_stop = response_stop.json()
+    assert data_stop["status"] == "STOPPED"
+    assert data_stop["timer_id"] == timer_id
+    assert "elapsed_seconds" in data_stop
+
+
+def test_new_manual_entry(client):
+    response = client.post(
+        "/api/v1/time-entries/manual",
+        json={
+            "description": "New manual entry",
+            "duration_minutes": 90,
+            "entry_date": date.today().isoformat(),
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["description"] == "New manual entry"
+    assert data["duration_minutes"] == 90
+    assert "entry_id" in data
+
+
+def test_new_daily_summary(client):
+    # 1. Add a manual entry
+    client.post(
+        "/api/v1/time-entries/manual",
+        json={
+            "description": "Meeting A",
+            "duration_minutes": 45,
+            "entry_date": date.today().isoformat(),
+        },
+    )
+
+    # 2. Add another manual entry
+    client.post(
+        "/api/v1/time-entries/manual",
+        json={
+            "description": "Coding B",
+            "duration_minutes": 120,
+            "entry_date": date.today().isoformat(),
+        },
+    )
+
+    # 3. Get daily summary
+    response = client.get("/api/v1/time-entries/daily-summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_minutes"] == 165
+    assert data["formatted_total"] == "2h 45m"
+    assert len(data["entries"]) >= 2
