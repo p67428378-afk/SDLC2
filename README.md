@@ -1,4 +1,47 @@
-# Project
+# SDLC2 - TimeTracker Application
+
+### Prerequisites
+- Python 3.11+
+
+### Setup Instructions
+1. Navigate to the server directory:
+   ```bash
+   cd server
+   ```
+2. Create and activate virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Running Tests
+To run backend unit tests with pytest:
+```bash
+pytest
+```
+
+### Starting Development Server
+Start FastAPI server with uvicorn:
+```bash
+uvicorn server.main:app --reload --port 8000
+```
+API endpoints will be available at `http://localhost:8000/api/v1`.
+
+## Full-Stack Local Development
+1. Start backend server (port 8000):
+   ```bash
+   uvicorn server.main:app --reload --port 8000
+   ```
+2. Start frontend development server (port 5173):
+   ```bash
+   cd client
+   npm install
+   npm run dev
+   ```
 
 ## Server
 

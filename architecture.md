@@ -44,7 +44,29 @@ graph TD
 - server/tests/test_time_entries.py
 
 ## Frontend Modules (client/)
-- (no client/ files found yet)
+- client/eslint.config.js
+- client/postcss.config.js
+- client/src/App.jsx
+- client/src/components/AlertBanner.jsx
+- client/src/components/Navbar.jsx
+- client/src/components/__tests__/DailySummary.test.jsx
+- client/src/components/__tests__/ProjectManagementModal.test.jsx
+- client/src/components/__tests__/TimerControl.test.jsx
+- client/src/components/manual/ManualEntryModal.jsx
+- client/src/components/projects/ProjectForm.jsx
+- client/src/components/projects/ProjectManagementModal.jsx
+- client/src/components/projects/ProjectTable.jsx
+- client/src/components/summary/DailySummary.jsx
+- client/src/components/summary/TimeLogList.jsx
+- client/src/components/timer/ProjectSelect.jsx
+- client/src/components/timer/TimerControl.jsx
+- client/src/main.jsx
+- client/src/pages/DashboardPage.jsx
+- client/src/services/api.js
+- client/src/setup.js
+- client/src/utils/formatters.js
+- client/tailwind.config.js
+- client/vite.config.js
 
 ## API Endpoints
 - GET /api/v1/projects

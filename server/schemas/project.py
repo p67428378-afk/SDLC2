@@ -1,37 +1,52 @@
 import re
 from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
-HEX_COLOR_REGEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
-class ProjectBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="Project name")
-    color_code: str = Field(..., description="Hex color code e.g. #3B82F6")
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    color_code: str = Field(..., description="Hex color code format #RRGGBB")
 
     @field_validator("color_code")
     @classmethod
-    def validate_color_code(cls, v: str) -> str:
-        if not HEX_COLOR_REGEX.match(v):
+    def validate_hex_color(cls, v: str) -> str:
+        if not re.match(r"^#[0-9A-Fa-f]{6}$", v):
             raise ValueError("Invalid hex color code format. Must be #RRGGBB.")
         return v.upper()
 
-class ProjectCreate(ProjectBase):
-    pass
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v_stripped = v.strip()
+        if not v_stripped:
+            raise ValueError("Project name cannot be empty or whitespace.")
+        return v_stripped
+
 
 class ProjectUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    color_code: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=100)
+    color_code: str = Field(..., description="Hex color code format #RRGGBB")
 
     @field_validator("color_code")
     @classmethod
-    def validate_color_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not HEX_COLOR_REGEX.match(v):
+    def validate_hex_color(cls, v: str) -> str:
+        if not re.match(r"^#[0-9A-Fa-f]{6}$", v):
             raise ValueError("Invalid hex color code format. Must be #RRGGBB.")
-        return v.upper() if v else v
+        return v.upper()
 
-class ProjectResponse(ProjectBase):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v_stripped = v.strip()
+        if not v_stripped:
+            raise ValueError("Project name cannot be empty or whitespace.")
+        return v_stripped
+
+
+class ProjectResponse(BaseModel):
     id: str
+    name: str
+    color_code: str
     created_at: datetime
     updated_at: datetime
 
