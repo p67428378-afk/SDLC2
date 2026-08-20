@@ -1,60 +1,57 @@
-# TimeTracker Pro - SCRUM-58 Project Tagging & Daily Summary
+# SDLC2 - TimeTracker Pro
 
-This repository contains the full-stack implementation for SCRUM-58: **Project Tagging for Time Entries & Daily Summary Grouping**.
+TimeTracker Pro is a full-stack time tracking application supporting color-coded projects, tagged time entries, daily summary aggregations, and theme preferences.
 
-### Setup & Installation
+### Prerequisites
+- Python 3.11+
+- virtualenv / uv
 
-1. Navigate to the root or `server/` directory:
+### Setup Instructions
+1. Navigate to the server directory:
    ```bash
    cd server
    ```
-
-2. Create and activate a Python virtual environment:
+2. Create and activate a virtual environment:
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
-
 3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-
-### Running the Application
-
-To start the FastAPI development server:
-```bash
-uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
-```
-The API documentation will be accessible at [http://localhost:8000/docs](http://localhost:8000/docs).
-
-### Running Tests
-
-Run the backend test suite using `pytest`:
-```bash
-pytest server/tests -v
-```
-
----
-
-## Full-Stack Local Development
-
-To run the complete application locally with both backend and frontend:
-
-1. **Backend Server** (Port 8000):
+4. Run tests:
+   ```bash
+   pytest
+   ```
+5. Start the development server (runs on port 8000):
    ```bash
    uvicorn server.main:app --reload --port 8000
    ```
 
-2. **Frontend App** (Port 5173):
+## Client Setup & Local Development
+
+### Prerequisites
+- Node.js 18+
+- npm
+
+### Setup Instructions
+1. Navigate to the client directory:
    ```bash
    cd client
+   ```
+2. Install dependencies:
+   ```bash
    npm install
+   ```
+3. Start the dev server (runs on port 5173):
+   ```bash
    npm run dev
    ```
 
-3. **Accessing the App**:
-   Open [http://localhost:5173](http://localhost:5173) in your browser.
+## Full-Stack Local Development
+- Backend API runs on `http://localhost:8000`
+- Frontend UI runs on `http://localhost:5173`
 
 ## Server
 

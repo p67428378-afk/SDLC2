@@ -27,19 +27,16 @@ graph TD
 
 ## Backend Modules (server/)
 - server/__init__.py
-- server/conftest.py
+- server/crud.py
 - server/database.py
 - server/main.py
-- server/models/__init__.py
-- server/models/project.py
-- server/models/time_entry.py
+- server/models.py
 - server/routers/__init__.py
 - server/routers/projects.py
 - server/routers/time_entries.py
-- server/schemas/__init__.py
-- server/schemas/project.py
-- server/schemas/time_entry.py
+- server/schemas.py
 - server/tests/__init__.py
+- server/tests/conftest.py
 - server/tests/test_projects.py
 - server/tests/test_time_entries.py
 
