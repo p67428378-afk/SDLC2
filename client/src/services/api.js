@@ -9,8 +9,44 @@ const api = axios.create({
   },
 });
 
+export const getProjects = async () => {
+  const response = await api.get("/api/v1/projects");
+  return response.data;
+};
+
+export const createProject = async (projectData) => {
+  const response = await api.post("/api/v1/projects", projectData);
+  return response.data;
+};
+
+export const updateProject = async (projectId, projectData) => {
+  const response = await api.put(`/api/v1/projects/${projectId}`, projectData);
+  return response.data;
+};
+
+export const deleteProject = async (projectId) => {
+  const response = await api.delete(`/api/v1/projects/${projectId}`);
+  return response.data;
+};
+
+export const getDailySummary = async (dateStr) => {
+  const params = {};
+  if (dateStr) {
+    params.entry_date = dateStr;
+  }
+  const response = await api.get("/api/v1/time-entries/daily-summary", {
+    params,
+  });
+  return response.data;
+};
+
 export const getTodaySummary = async () => {
-  const response = await api.get("/api/v1/time-entries/today");
+  const today = new Date().toISOString().split("T")[0];
+  return getDailySummary(today);
+};
+
+export const listTimeEntries = async (params = {}) => {
+  const response = await api.get("/api/v1/time-entries", { params });
   return response.data;
 };
 
@@ -19,23 +55,8 @@ export const createTimeEntry = async (entryData) => {
   return response.data;
 };
 
-export const listTimeEntries = async (params = {}) => {
-  const response = await api.get("/api/v1/time-entries", { params });
-  return response.data;
-};
-
 export const deleteTimeEntry = async (entryId) => {
   const response = await api.delete(`/api/v1/time-entries/${entryId}`);
-  return response.data;
-};
-
-export const getUserProfile = async () => {
-  const response = await api.get("/api/v1/users/me");
-  return response.data;
-};
-
-export const updateUserPreferences = async (preferences) => {
-  const response = await api.patch("/api/v1/users/me/preferences", preferences);
   return response.data;
 };
 

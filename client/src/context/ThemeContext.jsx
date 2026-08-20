@@ -1,60 +1,42 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { getUserProfile, updateUserPreferences } from "../services/api";
 
 const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-  const [darkMode, setDarkMode] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Fetch theme preference on initial load
-  useEffect(() => {
-    async function fetchTheme() {
-      try {
-        setLoading(true);
-        const profile = await getUserProfile();
-        const isDark = profile?.preferences?.dark_mode || false;
-        setDarkMode(isDark);
-        if (isDark) {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
-      } catch (err) {
-        console.error("Failed to fetch theme preference:", err);
-        setError("Could not load theme preference from server.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchTheme();
-  }, []);
-
-  const toggleTheme = async () => {
-    const newMode = !darkMode;
+  const [darkMode, setDarkMode] = useState(() => {
     try {
-      setError(null);
-      // Update backend
-      await updateUserPreferences({ dark_mode: newMode });
-      // Update local state and DOM
-      setDarkMode(newMode);
-      if (newMode) {
+      const saved = localStorage.getItem("chronos_theme_mode");
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+      return (
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      );
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("chronos_theme_mode", JSON.stringify(darkMode));
+      if (darkMode) {
         document.documentElement.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
       }
-    } catch (err) {
-      console.error("Failed to update theme preference:", err);
-      setError("Failed to save theme preference to server.");
-      throw err; // Let the component handle/display the error
+    } catch (e) {
+      console.error("Failed to save theme in localStorage", e);
     }
+  }, [darkMode]);
+
+  const toggleTheme = () => {
+    setDarkMode((prev) => !prev);
   };
 
   return (
-    <ThemeContext.Provider
-      value={{ darkMode, toggleTheme, loading, error, setError }}
-    >
+    <ThemeContext.Provider value={{ darkMode, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -62,7 +44,7 @@ export function ThemeProvider({ children }) {
 
 export function useTheme() {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;

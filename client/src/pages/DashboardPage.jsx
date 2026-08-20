@@ -1,197 +1,178 @@
-import React, { useState, useEffect } from "react";
-import TimerCard from "../components/dashboard/TimerCard.jsx";
-import ActivityLogCard from "../components/dashboard/ActivityLogCard.jsx";
-import DailyGoalProgressCard from "../components/dashboard/DailyGoalProgressCard.jsx";
-import ManualEntryModal from "../components/dashboard/ManualEntryModal.jsx";
+import React, { useState, useEffect, useCallback } from "react";
+import TimerControl from "../components/timer/TimerControl.jsx";
+import DailySummary from "../components/summary/DailySummary.jsx";
+import TimeLogList from "../components/summary/TimeLogList.jsx";
+import ProjectManagementModal from "../components/projects/ProjectManagementModal.jsx";
+import ManualEntryModal from "../components/manual/ManualEntryModal.jsx";
+import { useTheme } from "../context/ThemeContext.jsx";
 import {
-  getTodaySummary,
+  getProjects,
+  getDailySummary,
+  listTimeEntries,
   createTimeEntry,
   deleteTimeEntry,
-  listTimeEntries,
 } from "../services/api.js";
 
 export default function DashboardPage() {
-  const [entries, setEntries] = useState([]);
-  const [totalSeconds, setTotalSeconds] = useState(0);
-  const [weeklyTotalSeconds, setWeeklyTotalSeconds] = useState(0);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { darkMode, toggleTheme } = useTheme();
+
+  const [projects, setProjects] = useState([]);
+  const [dailySummary, setDailySummary] = useState({
+    formatted_total: "0h 0m",
+    projects: [],
+  });
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchData = async () => {
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const fetchDashboardData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError("");
 
-      // Fetch today's summary
-      const todayData = await getTodaySummary();
-      setEntries(todayData.entries || []);
-      setTotalSeconds(todayData.total_duration_seconds || 0);
+      const [projData, summaryData, entriesData] = await Promise.all([
+        getProjects().catch(() => []),
+        getDailySummary(todayStr).catch(() => ({
+          formatted_total: "0h 0m",
+          projects: [],
+        })),
+        listTimeEntries({ entry_date: todayStr }).catch(() => []),
+      ]);
 
-      // Fetch all entries to calculate weekly total (or just list all)
-      const allEntries = await listTimeEntries();
-      // Calculate weekly total (last 7 days)
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const weeklySum = allEntries
-        .filter((e) => new Date(e.logged_date) >= oneWeekAgo)
-        .reduce((sum, e) => sum + e.duration_seconds, 0);
-      setWeeklyTotalSeconds(weeklySum);
-    } catch (err) {
-      setError(
-        "Failed to load time tracking data. Please ensure the backend is running.",
+      setProjects(projData || []);
+      setDailySummary(
+        summaryData || { formatted_total: "0h 0m", projects: [] },
       );
+      setTimeEntries(entriesData || []);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      setError("Failed to load dashboard data from backend.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [todayStr]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleTimerStopped = async (entryData) => {
     await createTimeEntry(entryData);
-    await fetchData();
+    await fetchDashboardData();
   };
 
-  const handleManualEntrySave = async (entryData) => {
+  const handleManualSave = async (entryData) => {
     await createTimeEntry(entryData);
-    await fetchData();
+    await fetchDashboardData();
   };
 
   const handleDeleteEntry = async (entryId) => {
-    if (window.confirm("Are you sure you want to delete this entry?")) {
+    if (window.confirm("Are you sure you want to delete this time entry?")) {
       try {
         await deleteTimeEntry(entryId);
-        await fetchData();
+        await fetchDashboardData();
       } catch (err) {
-        setError("Failed to delete entry.");
+        setError("Failed to delete time entry.");
       }
     }
   };
 
-  const formatDuration = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return `${hrs}h ${mins}m`;
-  };
-
-  const manualEntriesCount = entries.filter((e) => e.type === "manual").length;
-  const manualDurationSeconds = entries
-    .filter((e) => e.type === "manual")
-    .reduce((sum, e) => sum + e.duration_seconds, 0);
-
   return (
-    <main className="flex-1 mt-16 p-margin-mobile md:p-margin-desktop space-y-gutter">
-      {error && (
-        <div className="bg-error-container text-on-error-container p-md rounded-xl border border-error/20 flex justify-between items-center">
-          <span>{error}</span>
-          <button
-            onClick={() => setError("")}
-            className="text-on-error-container hover:opacity-80"
-          >
-            <span className="material-symbols-outlined text-sm">close</span>
-          </button>
-        </div>
-      )}
-
-      {/* Actions Row */}
-      <div className="flex justify-end mb-lg">
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-primary hover:bg-primary-fixed text-on-primary-fixed font-label-md text-label-md py-2 px-4 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <span className="material-symbols-outlined text-sm">add</span>
-          Add Manual Time
-        </button>
-      </div>
-
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
-        {/* Total Logged */}
-        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-md flex flex-col justify-between">
-          <div>
-            <p className="font-label-sm text-label-sm text-on-surface-variant mb-xs">
-              Total Logged Today
-            </p>
-            <p className="font-display-lg text-display-lg text-on-surface">
-              {formatDuration(totalSeconds)}
-            </p>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⏱️</span>
+            <h1 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              TimeTracker Pro
+            </h1>
           </div>
-          <div className="mt-md">
-            <div className="flex justify-between font-label-sm text-label-sm text-on-surface-variant mb-1">
-              <span>Goal Progress</span>
-              <span>
-                {Math.min(Math.round((totalSeconds / 28800) * 100), 100)}% of 8h
-              </span>
-            </div>
-            <div className="w-full bg-surface-container-highest rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-primary h-1.5 rounded-full shadow-[0_0_8px_rgba(78,222,163,0.5)] transition-all duration-500"
-                style={{
-                  width: `${Math.min((totalSeconds / 28800) * 100, 100)}%`,
-                }}
-              ></div>
-            </div>
+
+          <div className="flex items-center gap-3">
+            {/* Dark Mode Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium flex items-center gap-1 border border-gray-200 dark:border-gray-700"
+              title="Toggle Dark Mode"
+            >
+              <span>{darkMode ? "🌙 Dark" : "☀️ Light"}</span>
+            </button>
+
+            {/* Manage Projects Button */}
+            <button
+              type="button"
+              onClick={() => setIsProjectModalOpen(true)}
+              className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold text-xs rounded-lg transition-colors border border-gray-200 dark:border-gray-600 flex items-center gap-1"
+            >
+              <span>📂</span> Manage Projects
+            </button>
+
+            {/* Add Manual Time Button */}
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(true)}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow transition-colors flex items-center gap-1"
+            >
+              <span>+</span> Add Manual Time
+            </button>
           </div>
         </div>
+      </header>
 
-        {/* Active Timer */}
-        <TimerCard onTimerStopped={handleTimerStopped} />
-
-        {/* Manual Entries */}
-        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-md flex flex-col justify-between">
-          <div>
-            <p className="font-label-sm text-label-sm text-on-surface-variant mb-xs">
-              Manual Entries
-            </p>
-            <p className="font-headline-lg text-headline-lg text-on-surface">
-              {manualEntriesCount}{" "}
-              {manualEntriesCount === 1 ? "entry" : "entries"}
-            </p>
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {error && (
+          <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm rounded-xl flex justify-between items-center">
+            <span>⚠️ {error}</span>
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="font-bold hover:opacity-75"
+            >
+              ✕
+            </button>
           </div>
-          <div className="mt-md flex items-center gap-2 text-on-surface-variant">
-            <span className="material-symbols-outlined text-sm">edit_note</span>
-            <span className="font-label-md text-label-md">
-              {formatDuration(manualDurationSeconds)} total
-            </span>
-          </div>
-        </div>
+        )}
 
-        {/* Weekly Total */}
-        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-md flex flex-col justify-between">
-          <div>
-            <p className="font-label-sm text-label-sm text-on-surface-variant mb-xs">
-              Weekly Total
-            </p>
-            <p className="font-display-lg text-display-lg text-on-surface">
-              {formatDuration(weeklyTotalSeconds)}
-            </p>
-          </div>
-          <div className="mt-md">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-              Last 7 days
-            </span>
-          </div>
-        </div>
-      </div>
+        {/* Section 1: Active Timer */}
+        <TimerControl
+          projects={projects}
+          onTimerStopped={handleTimerStopped}
+          onOpenProjectModal={() => setIsProjectModalOpen(true)}
+        />
 
-      {/* Lower Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-        {/* Activity Log */}
-        <ActivityLogCard entries={entries} onDeleteEntry={handleDeleteEntry} />
+        {/* Section 2: Daily Summary */}
+        <DailySummary dailySummary={dailySummary} />
 
-        {/* Goal Progress Widget */}
-        <DailyGoalProgressCard totalSeconds={totalSeconds} entries={entries} />
-      </div>
+        {/* Section 3: Time Entry Log */}
+        <TimeLogList
+          entries={timeEntries}
+          onDeleteEntry={handleDeleteEntry}
+          isLoading={isLoading}
+        />
+      </main>
 
-      {/* Manual Entry Modal */}
-      <ManualEntryModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleManualEntrySave}
+      {/* Project Management Modal */}
+      <ProjectManagementModal
+        isOpen={isProjectModalOpen}
+        onClose={() => setIsProjectModalOpen(false)}
+        projects={projects}
+        onProjectsUpdated={fetchDashboardData}
       />
-    </main>
+
+      {/* Manual Time Entry Modal */}
+      <ManualEntryModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        onSave={handleManualSave}
+        projects={projects}
+      />
+    </div>
   );
 }
