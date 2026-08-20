@@ -37,6 +37,7 @@ graph TD
 - server/schemas.py
 - server/tests/__init__.py
 - server/tests/conftest.py
+- server/tests/test_openapi.py
 - server/tests/test_projects.py
 - server/tests/test_time_entries.py
 
@@ -45,6 +46,9 @@ graph TD
 - client/postcss.config.js
 - client/src/App.jsx
 - client/src/App.test.jsx
+- client/src/__tests__/DailySummary.test.jsx
+- client/src/__tests__/ProjectManagementModal.test.jsx
+- client/src/__tests__/TimerControl.test.jsx
 - client/src/components/dashboard/ActivityLogCard.jsx
 - client/src/components/dashboard/DailyGoalProgressCard.jsx
 - client/src/components/dashboard/DarkModeToggle.jsx
@@ -53,6 +57,14 @@ graph TD
 - client/src/components/dashboard/TimerCard.jsx
 - client/src/components/layout/Header.jsx
 - client/src/components/layout/Sidebar.jsx
+- client/src/components/manual/ManualEntryModal.jsx
+- client/src/components/projects/ProjectForm.jsx
+- client/src/components/projects/ProjectManagementModal.jsx
+- client/src/components/projects/ProjectTable.jsx
+- client/src/components/summary/DailySummary.jsx
+- client/src/components/summary/TimeLogList.jsx
+- client/src/components/timer/ProjectSelect.jsx
+- client/src/components/timer/TimerControl.jsx
 - client/src/context/ThemeContext.jsx
 - client/src/context/ThemeContext.test.jsx
 - client/src/main.jsx
