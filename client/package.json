@@ -1,0 +1,37 @@
+{
+  "name": "timetrack-pro-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "vite build --mode development",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "axios": "1.7.7",
+    "lucide-react": "0.453.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.26.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.5.0",
+    "@testing-library/react": "16.0.1",
+    "@vitejs/plugin-react": "4.3.2",
+    "autoprefixer": "10.4.20",
+    "jsdom": "25.0.1",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.13",
+    "vite": "5.4.8",
+    "vitest": "2.1.2",
+    "eslint": "^9.9.0",
+    "@eslint/js": "^9.9.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.0",
+    "eslint-plugin-react": "^7.35.0"
+  }
+}
