@@ -1,69 +1,37 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+
 from server.database import get_db
-from server.models.audit_log import AuditLog
-from server.schemas.audit import AuditLogResponse
+from server.models import AuditLog
+from server.schemas import AuditLogEntry
 
-router = APIRouter(prefix="/audit-logs", tags=["audit"])
+router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 
 
-@router.get(
-    "",
-    response_model=List[AuditLogResponse],
-    status_code=status.HTTP_200_OK,
-    summary="List PCI-Compliant Audit Logs",
-)
+@router.get("", response_model=List[AuditLogEntry])
 def list_audit_logs(
-    skip: int = 0,
-    limit: int = 50,
-    transaction_id: Optional[str] = None,
-    action: Optional[str] = None,
+    transaction_id: Optional[str] = Query(None, description="Filter by transaction ID"),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     query = db.query(AuditLog)
     if transaction_id:
         query = query.filter(AuditLog.transaction_id == transaction_id)
-    if action:
-        query = query.filter(AuditLog.action == action)
-
-    logs = query.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+    if event_type:
+        query = query.filter(AuditLog.event_type == event_type)
+    logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
 
     return [
-        AuditLogResponse(
+        AuditLogEntry(
             id=log.id,
             transaction_id=log.transaction_id,
-            action=log.action,
-            actor_id=log.actor_id,
-            masked_payload=log.masked_payload
-            if isinstance(log.masked_payload, dict)
-            else {"raw": str(log.masked_payload)},
+            event_type=log.event_type,
+            masked_payload=log.masked_payload,
             ip_address=log.ip_address,
-            timestamp=log.timestamp,
+            created_at=log.created_at,
         )
         for log in logs
     ]
-
-
-@router.get(
-    "/{log_id}",
-    response_model=AuditLogResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get Specific Audit Log Entry",
-)
-def get_audit_log(log_id: str, db: Session = Depends(get_db)):
-    log = db.query(AuditLog).filter(AuditLog.id == log_id).first()
-    if not log:
-        raise HTTPException(status_code=404, detail="Audit log not found")
-
-    return AuditLogResponse(
-        id=log.id,
-        transaction_id=log.transaction_id,
-        action=log.action,
-        actor_id=log.actor_id,
-        masked_payload=log.masked_payload
-        if isinstance(log.masked_payload, dict)
-        else {"raw": str(log.masked_payload)},
-        ip_address=log.ip_address,
-        timestamp=log.timestamp,
-    )

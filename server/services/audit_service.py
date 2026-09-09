@@ -1,79 +1,61 @@
 import re
-from typing import Any, Dict, Union
-from datetime import datetime, timezone
+from typing import Optional, Any, Dict
 from sqlalchemy.orm import Session
-from server.models.audit_log import AuditLog
-
-PAN_PATTERN = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
-CVV_KEYS = {"cvv", "cvc", "security_code", "card_cvv", "card_cvc"}
-PAN_KEYS = {"pan", "card_number", "number", "account_number", "cardnumber"}
-SENSITIVE_KEYS = {"password", "secret", "private_key", "client_secret"}
+from server.models import AuditLog
 
 
-def mask_pan_string(text: str) -> str:
-    def _repl(match):
-        digits = re.sub(r"\D", "", match.group(0))
-        if 13 <= len(digits) <= 19:
-            last4 = digits[-4:]
-            return f"****-****-****-{last4}"
-        return match.group(0)
-
-    return PAN_PATTERN.sub(_repl, text)
-
-
-def sanitize_data(data: Any) -> Any:
+def mask_sensitive_data(data: Any) -> Any:
     if isinstance(data, dict):
-        sanitized = {}
+        masked = {}
         for k, v in data.items():
-            k_lower = str(k).lower()
-            if any(cvv_key in k_lower for cvv_key in CVV_KEYS):
-                sanitized[k] = "***"
-            elif any(pan_key in k_lower for pan_key in PAN_KEYS) and isinstance(v, str):
+            key_lower = k.lower()
+            if any(
+                secret_term in key_lower
+                for secret_term in ["cvv", "cvc", "security_code", "password", "secret"]
+            ):
+                masked[k] = "[REDACTED]"
+            elif any(
+                card_term in key_lower
+                for card_term in ["card_number", "pan", "account_number"]
+            ) and isinstance(v, str):
                 digits = re.sub(r"\D", "", v)
                 if len(digits) >= 4:
-                    sanitized[k] = f"****-****-****-{digits[-4:]}"
+                    masked[k] = f"**** **** **** {digits[-4:]}"
                 else:
-                    sanitized[k] = "****"
-            elif any(sens_key in k_lower for sens_key in SENSITIVE_KEYS):
-                sanitized[k] = "[REDACTED]"
-            elif k_lower == "paymentdata" and isinstance(v, str) and len(v) > 20:
-                sanitized[k] = f"{v[:6]}...[ENCRYPTED_WALLET_TOKEN]...{v[-4:]}"
+                    masked[k] = "****"
+            elif "token" in key_lower and isinstance(v, str) and len(v) > 8:
+                masked[k] = f"{v[:4]}...{v[-4:]}"
             else:
-                sanitized[k] = sanitize_data(v)
-        return sanitized
+                masked[k] = mask_sensitive_data(v)
+        return masked
     elif isinstance(data, list):
-        return [sanitize_data(item) for item in data]
+        return [mask_sensitive_data(item) for item in data]
     elif isinstance(data, str):
-        return mask_pan_string(data)
-    else:
-        return data
+        # Look for 13-19 digit card numbers in plain text
+        def mask_card_match(match):
+            val = match.group(0)
+            digits = re.sub(r"\D", "", val)
+            return f"**** **** **** {digits[-4:]}"
+
+        return re.sub(r"\b(?:\d[ -]*?){13,19}\b", mask_card_match, data)
+    return data
 
 
 def log_audit_event(
     db: Session,
-    action: str,
-    actor_id: str,
-    payload: Union[Dict[str, Any], Any],
-    transaction_id: str = None,
-    ip_address: str = None,
+    event_type: str,
+    transaction_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+    ip_address: Optional[str] = None,
 ) -> AuditLog:
-    sanitized_payload = sanitize_data(payload)
-    if not isinstance(sanitized_payload, dict):
-        sanitized_payload = {"data": sanitized_payload}
-
+    masked = mask_sensitive_data(payload) if payload else {}
     audit_entry = AuditLog(
         transaction_id=transaction_id,
-        action=action,
-        actor_id=actor_id or "system",
-        masked_payload=sanitized_payload,
-        ip_address=ip_address,
-        timestamp=datetime.now(timezone.utc),
+        event_type=event_type,
+        masked_payload=masked,
+        ip_address=ip_address or "127.0.0.1",
     )
     db.add(audit_entry)
-    try:
-        db.commit()
-        db.refresh(audit_entry)
-    except Exception:
-        db.rollback()
-        raise
+    db.commit()
+    db.refresh(audit_entry)
     return audit_entry

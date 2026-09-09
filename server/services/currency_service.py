@@ -1,115 +1,83 @@
 from datetime import datetime, timezone, timedelta
-from typing import Tuple, Dict
+from typing import Dict
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from server.models.exchange_rate_cache import ExchangeRateCache
+from server.models import ExchangeRateCache
 
-# Standard FX benchmark rates relative to 1 USD
-BASE_FX_RATES: Dict[str, float] = {
+SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CAD"]
+
+DEFAULT_USD_RATES = {
     "USD": 1.0,
-    "EUR": 0.925000,
-    "GBP": 0.790000,
-    "CAD": 1.360000,
-    "AUD": 1.520000,
-    "JPY": 155.500000,
-    "CHF": 0.910000,
-    "CNY": 7.230000,
-    "INR": 83.500000,
-    "SGD": 1.350000,
-    "NZD": 1.640000,
+    "EUR": 0.9250,
+    "GBP": 0.7950,
+    "JPY": 155.20,
+    "CAD": 1.3650,
 }
 
-SUPPORTED_CURRENCIES = set(BASE_FX_RATES.keys())
 
-
-def is_valid_currency(currency_code: str) -> bool:
-    if not currency_code or len(currency_code) != 3:
-        return False
-    return currency_code.upper() in SUPPORTED_CURRENCIES
+def validate_currency(currency: str) -> str:
+    curr = currency.upper().strip()
+    if curr not in SUPPORTED_CURRENCIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported currency '{currency}'. Supported currencies: {', '.join(SUPPORTED_CURRENCIES)}",
+        )
+    return curr
 
 
 def get_exchange_rate(
-    db: Session, base_currency: str, target_currency: str
-) -> Tuple[float, bool]:
-    """
-    Returns (rate, is_cached).
-    Checks DB cache for valid non-expired rate with 15-minute TTL.
-    """
-    base = base_currency.upper()
-    target = target_currency.upper()
-
-    if not is_valid_currency(base):
-        raise HTTPException(
-            status_code=400, detail=f"Unsupported base currency: {base}"
-        )
-    if not is_valid_currency(target):
-        raise HTTPException(
-            status_code=400, detail=f"Unsupported target currency: {target}"
-        )
+    db: Session, base_currency: str = "USD", target_currency: str = "USD"
+) -> float:
+    base = validate_currency(base_currency)
+    target = validate_currency(target_currency)
 
     if base == target:
-        return 1.0, True
+        return 1.0
 
     now = datetime.now(timezone.utc)
-
-    # 1. Check database cache
-    cached_entry = (
+    # Check cache for USD to target
+    cache_entry = (
         db.query(ExchangeRateCache)
         .filter(
-            ExchangeRateCache.base_currency == base,
+            ExchangeRateCache.base_currency == "USD",
             ExchangeRateCache.target_currency == target,
-            ExchangeRateCache.expires_at > now,
         )
         .first()
     )
 
-    if cached_entry:
-        return float(cached_entry.rate), True
+    target_rate_usd = DEFAULT_USD_RATES.get(target, 1.0)
+    if cache_entry:
+        expires_at = cache_entry.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
 
-    # 2. Calculate rate via USD anchor
-    usd_to_base = BASE_FX_RATES[base]
-    usd_to_target = BASE_FX_RATES[target]
-    calculated_rate = round(usd_to_target / usd_to_base, 6)
-
-    # 3. Store in DB cache with 15-minute TTL
-    expires = now + timedelta(minutes=15)
-    try:
-        existing = (
-            db.query(ExchangeRateCache)
-            .filter(
-                ExchangeRateCache.base_currency == base,
-                ExchangeRateCache.target_currency == target,
-            )
-            .first()
-        )
-
-        if existing:
-            existing.rate = calculated_rate
-            existing.expires_at = expires
+        if expires_at and expires_at > now:
+            target_rate_usd = cache_entry.rate
         else:
-            new_cache = ExchangeRateCache(
-                base_currency=base,
-                target_currency=target,
-                rate=calculated_rate,
-                expires_at=expires,
-            )
-            db.add(new_cache)
+            # Refresh cache entry
+            cache_entry.rate = target_rate_usd
+            cache_entry.expires_at = now + timedelta(minutes=15)
+            db.commit()
+    else:
+        # Create cache entry with 15-min TTL
+        new_entry = ExchangeRateCache(
+            base_currency="USD",
+            target_currency=target,
+            rate=target_rate_usd,
+            expires_at=now + timedelta(minutes=15),
+        )
+        db.add(new_entry)
         db.commit()
-    except Exception:
-        db.rollback()
 
-    return calculated_rate, False
+    # If base is not USD, convert from USD rate
+    base_rate_usd = DEFAULT_USD_RATES.get(base, 1.0)
+    rate = target_rate_usd / base_rate_usd
+    return round(rate, 4)
 
 
-def convert_currency(
-    db: Session, amount: float, source_currency: str, target_currency: str
-) -> Tuple[float, float]:
-    """
-    Returns (converted_amount, exchange_rate)
-    """
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
-
-    rate, _ = get_exchange_rate(db, source_currency, target_currency)
-    converted = round(amount * rate, 2)
-    return converted, rate
+def get_all_rates(db: Session, base_currency: str = "USD") -> Dict[str, float]:
+    base = validate_currency(base_currency)
+    rates = {}
+    for target in SUPPORTED_CURRENCIES:
+        rates[target] = get_exchange_rate(db, base, target)
+    return rates
