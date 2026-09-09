@@ -1,18 +1,23 @@
-def test_create_checkout_session(client):
+from fastapi.testclient import TestClient
+
+
+def test_create_checkout_session_usd(client: TestClient):
     payload = {
         "amount": 49.99,
         "currency": "USD",
-        "customer_email": "customer@example.com",
-        "items": [
-            {"name": "Standard Subscription", "quantity": 1, "unit_price": 49.99}
-        ],
+        "customer_email": "buyer@example.com",
+        "cardholder_name": "Jane Buyer",
+        "card_number": "4242424242424242",
+        "exp_month": 12,
+        "exp_year": 2028,
+        "cvv": "123",
+        "items": [{"name": "Premium T-Shirt", "price": 49.99, "quantity": 1}],
     }
     response = client.post("/api/v1/payments/checkout-session", json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert "session_id" in data
     assert "payment_intent_id" in data
-    assert "client_secret" in data
     assert data["base_amount"] == 49.99
     assert data["base_currency"] == "USD"
     assert data["target_amount"] == 49.99
@@ -20,114 +25,130 @@ def test_create_checkout_session(client):
     assert data["exchange_rate"] == 1.0
 
 
-def test_create_checkout_session_multi_currency(client):
+def test_create_checkout_session_eur_conversion(client: TestClient):
     payload = {
         "amount": 100.00,
         "currency": "EUR",
         "customer_email": "euro.buyer@example.com",
     }
     response = client.post("/api/v1/payments/checkout-session", json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["target_currency"] == "EUR"
     assert data["exchange_rate"] == 0.9250
     assert data["target_amount"] == 92.50
 
 
-def test_create_checkout_session_invalid_currency(client):
+def test_create_checkout_session_invalid_currency(client: TestClient):
     payload = {
         "amount": 50.00,
         "currency": "XYZ",
-        "customer_email": "invalid@example.com",
     }
     response = client.post("/api/v1/payments/checkout-session", json=payload)
     assert response.status_code == 400
     assert "Unsupported currency" in response.json()["detail"]
 
 
-def test_digital_wallet_payment_success(client):
+def test_digital_wallet_payment_apple_pay(client: TestClient):
     payload = {
         "wallet_type": "apple_pay",
-        "payment_token": "valid_apple_pay_token_12345",
+        "payment_token": "pk_token_valid_apple_payload_12345",
+        "amount": 35.50,
         "currency": "USD",
-        "amount": 29.99,
         "customer_email": "apple.user@example.com",
     }
     response = client.post("/api/v1/payments/digital-wallet", json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["status"] == "COMPLETED"
-    assert data["amount"] == 29.99
-    assert data["currency"] == "USD"
-    assert data["wallet_type"] == "apple_pay"
     assert "transaction_id" in data
+    assert data["payment_method"] == "apple_pay"
 
 
-def test_digital_wallet_payment_google_pay(client):
+def test_digital_wallet_payment_invalid_token(client: TestClient):
     payload = {
         "wallet_type": "google_pay",
-        "payment_token": "valid_google_pay_token_67890",
-        "currency": "EUR",
-        "amount": 50.00,
-        "customer_email": "google.user@example.com",
-    }
-    response = client.post("/api/v1/payments/digital-wallet", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "COMPLETED"
-    assert data["wallet_type"] == "google_pay"
-
-
-def test_digital_wallet_invalid_token(client):
-    payload = {
-        "wallet_type": "apple_pay",
-        "payment_token": "expired_payment_token",
+        "payment_token": "token_expired_999",
+        "amount": 25.00,
         "currency": "USD",
-        "amount": 29.99,
-        "customer_email": "apple.user@example.com",
     }
     response = client.post("/api/v1/payments/digital-wallet", json=payload)
     assert response.status_code == 422
-    assert "invalid or expired" in response.json()["detail"].lower()
+    assert (
+        "expired" in response.json()["detail"] or "invalid" in response.json()["detail"]
+    )
 
 
-def test_get_exchange_rates(client):
-    response = client.get("/api/v1/payments/rates?base_currency=USD")
+def test_digital_wallet_payment_unsupported_wallet(client: TestClient):
+    payload = {
+        "wallet_type": "crypto_wallet",
+        "payment_token": "valid_token",
+        "amount": 20.00,
+        "currency": "USD",
+    }
+    response = client.post("/api/v1/payments/digital-wallet", json=payload)
+    assert response.status_code == 422
+
+
+def test_list_transactions_seeded(client: TestClient):
+    response = client.get("/api/v1/payments/transactions")
     assert response.status_code == 200
     data = response.json()
-    assert data["base_currency"] == "USD"
-    assert "EUR" in data["rates"]
-    assert "GBP" in data["rates"]
-    assert "JPY" in data["rates"]
-    assert "CAD" in data["rates"]
+    assert isinstance(data, list)
+    assert len(data) > 0
+
+    # Verify fields
+    first_tx = data[0]
+    assert "id" in first_tx
+    assert "amount" in first_tx
+    assert "currency" in first_tx
+    assert "status" in first_tx
+    assert "created_at" in first_tx
 
 
-def test_list_and_get_transactions(client):
-    # Initiate a transaction first
-    payload = {
-        "amount": 75.00,
-        "currency": "USD",
-        "customer_email": "tx.query@example.com",
-    }
-    create_res = client.post("/api/v1/payments/checkout-session", json=payload)
-    assert create_res.status_code == 200
-
-    # Query transaction list
-    list_res = client.get("/api/v1/payments/transactions?search=tx.query@example.com")
-    assert list_res.status_code == 200
-    tx_list = list_res.json()
-    assert len(tx_list) >= 1
-    tx_id = tx_list[0]["id"]
-
-    # Query transaction detail
-    detail_res = client.get(f"/api/v1/payments/transactions/{tx_id}")
-    assert detail_res.status_code == 200
-    detail = detail_res.json()
-    assert detail["id"] == tx_id
-    assert detail["customer_email"] == "tx.query@example.com"
-    assert detail["amount"] == 75.00
+def test_list_transactions_filtered_by_status(client: TestClient):
+    response = client.get("/api/v1/payments/transactions?status=COMPLETED")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) > 0
+    for tx in data:
+        assert tx["status"] == "COMPLETED"
 
 
-def test_get_nonexistent_transaction(client):
-    response = client.get("/api/v1/payments/transactions/tx_nonexistent_99999")
+def test_get_transaction_by_id_success(client: TestClient):
+    response = client.get("/api/v1/payments/transactions/tx_1001")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "tx_1001"
+    assert data["amount"] == 149.99
+    assert data["currency"] == "USD"
+    assert data["status"] == "COMPLETED"
+
+
+def test_get_transaction_by_id_not_found(client: TestClient):
+    response = client.get("/api/v1/payments/transactions/tx_non_existent_99999")
     assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_get_exchange_rates(client: TestClient):
+    response = client.get("/api/v1/payments/rates")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) >= 5
+
+    eur_rate = next((r for r in data if r["target_currency"] == "EUR"), None)
+    assert eur_rate is not None
+    assert eur_rate["rate"] == 0.9250
+
+
+def test_get_exchange_rate_target_filter(client: TestClient):
+    response = client.get(
+        "/api/v1/payments/rates?base_currency=USD&target_currency=GBP"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["target_currency"] == "GBP"
+    assert data[0]["rate"] == 0.7850

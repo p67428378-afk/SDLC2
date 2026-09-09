@@ -1,112 +1,93 @@
-import json
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+import stripe
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from server.config import settings
 from server.database import get_db
-from server.models import Transaction, CheckoutSession
-from server.services.stripe_service import verify_webhook_signature
-from server.services.audit_service import log_audit_event
+from server.models import Transaction, get_utc_now
+from server.services.stripe_service import StripeService
+from server.services.audit_service import AuditService
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
-@router.post("/stripe", status_code=200)
+@router.post("/stripe")
 async def handle_stripe_webhook(
     request: Request,
-    stripe_signature: str = Header(None, alias="Stripe-Signature"),
+    stripe_signature: str = Header(None, alias="stripe-signature"),
     db: Session = Depends(get_db),
 ):
-    body_bytes = await request.body()
-
-    # If secret is set and signature header provided, verify signature
-    if (
-        settings.STRIPE_WEBHOOK_SECRET
-        and settings.STRIPE_WEBHOOK_SECRET != "whsec_mock_webhook_secret_67890"
-    ):
-        if not stripe_signature or not verify_webhook_signature(
-            body_bytes, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
-        ):
-            raise HTTPException(
-                status_code=401, detail="Invalid Stripe webhook signature."
-            )
-    else:
-        # If signature is provided, attempt verification unless it's test mode
-        if stripe_signature and not verify_webhook_signature(
-            body_bytes, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
-        ):
-            raise HTTPException(
-                status_code=401, detail="Invalid Stripe webhook signature."
-            )
+    payload_bytes = await request.body()
 
     try:
-        event = json.loads(body_bytes.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid webhook JSON payload.")
+        event = StripeService.verify_webhook_signature(payload_bytes, stripe_signature)
+    except (stripe.error.SignatureVerificationError, ValueError) as e:
+        AuditService.log_event(
+            db=db,
+            event_type="stripe.webhook.signature_verification_failed",
+            action="WEBHOOK_REJECTED",
+            status_code=401,
+            signature_valid=False,
+            raw_payload={"error": str(e)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature.",
+        )
 
-    event_type = event.get("type", "")
+    event_type = event.get("type", "unknown")
     event_data = event.get("data", {}).get("object", {})
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    payment_intent_id = event_data.get("id")
 
-    tx_id_for_log = None
-
+    # Idempotent event processing
     if event_type == "payment_intent.succeeded":
-        pi_id = event_data.get("id")
-        if pi_id:
+        if payment_intent_id:
             tx = (
                 db.query(Transaction)
-                .filter(Transaction.payment_intent_id == pi_id)
+                .filter(Transaction.payment_intent_id == payment_intent_id)
                 .first()
             )
             if tx:
-                tx_id_for_log = tx.id
-                if tx.status != "COMPLETED":
-                    tx.status = "COMPLETED"
-                    tx.remaining_refundable_balance = tx.converted_amount
-                    if tx.session_id:
-                        cs = (
-                            db.query(CheckoutSession)
-                            .filter(CheckoutSession.id == tx.session_id)
-                            .first()
-                        )
-                        if cs:
-                            cs.status = "COMPLETED"
-                    db.commit()
-
-    elif event_type == "payment_intent.payment_failed":
-        pi_id = event_data.get("id")
-        if pi_id:
-            tx = (
-                db.query(Transaction)
-                .filter(Transaction.payment_intent_id == pi_id)
-                .first()
-            )
-            if tx:
-                tx_id_for_log = tx.id
-                tx.status = "FAILED"
+                tx.status = "COMPLETED"
+                tx.updated_at = get_utc_now()
                 db.commit()
 
-    elif event_type == "charge.refunded":
-        pi_id = event_data.get("payment_intent")
-        if pi_id:
+    elif event_type == "payment_intent.payment_failed":
+        if payment_intent_id:
             tx = (
                 db.query(Transaction)
-                .filter(Transaction.payment_intent_id == pi_id)
+                .filter(Transaction.payment_intent_id == payment_intent_id)
                 .first()
             )
             if tx:
-                tx_id_for_log = tx.id
+                tx.status = "FAILED"
+                tx.updated_at = get_utc_now()
+                db.commit()
 
-    log_audit_event(
+    elif event_type in ("charge.refunded", "refund.created"):
+        if payment_intent_id:
+            tx = (
+                db.query(Transaction)
+                .filter(Transaction.payment_intent_id == payment_intent_id)
+                .first()
+            )
+            if tx and tx.remaining_refundable_balance <= 0.01:
+                tx.status = "REFUNDED"
+                tx.updated_at = get_utc_now()
+                db.commit()
+
+    # Log successful webhook handling
+    AuditService.log_event(
         db=db,
-        event_type=f"webhook_{event_type}",
-        transaction_id=tx_id_for_log,
-        payload={
+        event_type=f"stripe.webhook.{event_type}",
+        action="WEBHOOK_PROCESSED",
+        transaction_id=None,
+        status_code=200,
+        signature_valid=True,
+        raw_payload={
             "event_id": event.get("id"),
             "event_type": event_type,
-            "signature_verified": True,
+            "payment_intent_id": payment_intent_id,
         },
-        ip_address=client_ip,
     )
 
-    return {"received": True, "event_type": event_type}
+    return {"status": "success", "received": True, "event_type": event_type}

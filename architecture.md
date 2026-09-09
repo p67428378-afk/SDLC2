@@ -55,7 +55,27 @@ graph TD
 - server/tests/test_webhooks.py
 
 ## Frontend Modules (client/)
-- (no client/ files found yet)
+- client/eslint.config.js
+- client/postcss.config.js
+- client/src/App.jsx
+- client/src/components/AnalyticsDashboard.jsx
+- client/src/components/CheckoutPage.jsx
+- client/src/components/CurrencySelector.jsx
+- client/src/components/Navbar.jsx
+- client/src/components/RefundPortal.jsx
+- client/src/components/StatusBadge.jsx
+- client/src/components/WebhookLogViewer.jsx
+- client/src/main.jsx
+- client/src/pages/AnalyticsPage.jsx
+- client/src/pages/CheckoutPage.jsx
+- client/src/pages/RefundPortalPage.jsx
+- client/src/services/api.js
+- client/src/setup.js
+- client/src/tests/AnalyticsDashboard.test.jsx
+- client/src/tests/CheckoutPage.test.jsx
+- client/src/tests/RefundPortal.test.jsx
+- client/tailwind.config.js
+- client/vite.config.js
 
 ## API Endpoints
 - POST /api/v1/payments/checkout-session

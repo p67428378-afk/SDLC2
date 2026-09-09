@@ -2,6 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Payment Gateway Service",
+    "description": "PCI-compliant Payment Gateway Service backend with Stripe, Digital Wallets, and Multi-Currency support.",
     "version": "1.0.0"
   },
   "paths": {
@@ -23,7 +24,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -51,8 +52,8 @@
         "tags": [
           "payments"
         ],
-        "summary": "Pay With Digital Wallet",
-        "operationId": "pay_with_digital_wallet_api_v1_payments_digital_wallet_post",
+        "summary": "Process Digital Wallet Payment",
+        "operationId": "process_digital_wallet_payment_api_v1_payments_digital_wallet_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -64,58 +65,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DigitalWalletPaymentResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/payments/rates": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Get Exchange Rates",
-        "operationId": "get_exchange_rates_api_v1_payments_rates_get",
-        "parameters": [
-          {
-            "name": "base_currency",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Base currency ISO code",
-              "default": "USD",
-              "title": "Base Currency"
-            },
-            "description": "Base currency ISO code"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExchangeRateResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -153,13 +107,11 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by status",
               "title": "Status"
-            },
-            "description": "Filter by status"
+            }
           },
           {
-            "name": "currency",
+            "name": "customer_email",
             "in": "query",
             "required": false,
             "schema": {
@@ -171,28 +123,8 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by currency",
-              "title": "Currency"
-            },
-            "description": "Filter by currency"
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Search by ID or customer email",
-              "title": "Search"
-            },
-            "description": "Search by ID or customer email"
+              "title": "Customer Email"
+            }
           },
           {
             "name": "skip",
@@ -200,7 +132,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 0,
               "default": 0,
               "title": "Skip"
             }
@@ -211,8 +142,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -251,8 +180,8 @@
         "tags": [
           "payments"
         ],
-        "summary": "Get Transaction Detail",
-        "operationId": "get_transaction_detail_api_v1_payments_transactions__transaction_id__get",
+        "summary": "Get Transaction",
+        "operationId": "get_transaction_api_v1_payments_transactions__transaction_id__get",
         "parameters": [
           {
             "name": "transaction_id",
@@ -288,13 +217,80 @@
         }
       }
     },
+    "/api/v1/payments/rates": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Exchange Rates",
+        "operationId": "get_exchange_rates_api_v1_payments_rates_get",
+        "parameters": [
+          {
+            "name": "base_currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3,
+              "default": "USD",
+              "title": "Base Currency"
+            }
+          },
+          {
+            "name": "target_currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Currency"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExchangeRateResponse"
+                  },
+                  "title": "Response Get Exchange Rates Api V1 Payments Rates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/refunds": {
       "post": {
         "tags": [
           "refunds"
         ],
-        "summary": "Create Refund",
-        "operationId": "create_refund_api_v1_refunds_post",
+        "summary": "Process Refund",
+        "operationId": "process_refund_api_v1_refunds_post",
         "requestBody": {
           "required": true,
           "content": {
@@ -348,10 +344,8 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by transaction ID",
               "title": "Transaction Id"
-            },
-            "description": "Filter by transaction ID"
+            }
           },
           {
             "name": "skip",
@@ -359,7 +353,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 0,
               "default": 0,
               "title": "Skip"
             }
@@ -370,8 +363,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -414,7 +405,7 @@
         "operationId": "handle_stripe_webhook_api_v1_webhooks_stripe_post",
         "parameters": [
           {
-            "name": "Stripe-Signature",
+            "name": "stripe-signature",
             "in": "header",
             "required": false,
             "schema": {
@@ -445,10 +436,99 @@
         }
       }
     },
+    "/api/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List Audit Logs",
+        "operationId": "list_audit_logs_api_v1_audit_get",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogEntry"
+                  },
+                  "title": "Response List Audit Logs Api V1 Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit-logs": {
       "get": {
         "tags": [
-          "audit-logs"
+          "audit"
         ],
         "summary": "List Audit Logs",
         "operationId": "list_audit_logs_api_v1_audit_logs_get",
@@ -466,10 +546,8 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by transaction ID",
               "title": "Transaction Id"
-            },
-            "description": "Filter by transaction ID"
+            }
           },
           {
             "name": "event_type",
@@ -484,10 +562,8 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by event type",
               "title": "Event Type"
-            },
-            "description": "Filter by event type"
+            }
           },
           {
             "name": "skip",
@@ -495,7 +571,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 0,
               "default": 0,
               "title": "Skip"
             }
@@ -506,8 +581,6 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -541,10 +614,10 @@
         }
       }
     },
-    "/": {
+    "/api/v1/health": {
       "get": {
-        "summary": "Root",
-        "operationId": "root__get",
+        "summary": "Health Check",
+        "operationId": "health_check_api_v1_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -597,17 +670,16 @@
             "type": "string",
             "title": "Event Type"
           },
-          "masked_payload": {
+          "action": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Masked Payload"
+            "title": "Action"
           },
           "ip_address": {
             "anyOf": [
@@ -620,16 +692,55 @@
             ],
             "title": "Ip Address"
           },
-          "created_at": {
+          "user_id": {
             "anyOf": [
               {
                 "type": "string"
               },
               {
-                "type": "string",
-                "format": "date-time"
+                "type": "null"
               }
             ],
+            "title": "User Id"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code",
+            "default": 200
+          },
+          "signature_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signature Valid",
+            "default": true
+          },
+          "masked_payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Masked Payload"
+          },
+          "created_at": {
+            "type": "string",
             "title": "Created At"
           }
         },
@@ -643,24 +754,35 @@
       },
       "CartItem": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
           },
           "quantity": {
             "type": "integer",
             "title": "Quantity",
             "default": 1
-          },
-          "unit_price": {
-            "type": "number",
-            "title": "Unit Price"
           }
         },
         "type": "object",
         "required": [
           "name",
-          "unit_price"
+          "price"
         ],
         "title": "CartItem"
       },
@@ -670,20 +792,26 @@
             "type": "number",
             "exclusiveMinimum": 0.0,
             "title": "Amount",
-            "description": "Amount in base currency"
+            "description": "Cart total amount"
           },
           "currency": {
             "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
             "title": "Currency",
-            "description": "Target currency ISO code (USD, EUR, GBP, JPY, CAD)",
+            "description": "ISO 4217 currency code",
             "default": "USD"
           },
           "customer_email": {
-            "type": "string",
-            "format": "email",
-            "title": "Customer Email",
-            "description": "Customer email address",
-            "default": "customer@example.com"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Email"
           },
           "items": {
             "anyOf": [
@@ -698,6 +826,61 @@
               }
             ],
             "title": "Items"
+          },
+          "cardholder_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cardholder Name"
+          },
+          "card_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Number"
+          },
+          "exp_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Month"
+          },
+          "exp_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exp Year"
+          },
+          "cvv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvv"
           }
         },
         "type": "object",
@@ -713,11 +896,25 @@
             "title": "Session Id"
           },
           "payment_intent_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Payment Intent Id"
           },
           "client_secret": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Client Secret"
           },
           "base_amount": {
@@ -744,8 +941,6 @@
         "type": "object",
         "required": [
           "session_id",
-          "payment_intent_id",
-          "client_secret",
           "base_amount",
           "base_currency",
           "target_amount",
@@ -759,39 +954,36 @@
           "wallet_type": {
             "type": "string",
             "title": "Wallet Type",
-            "description": "Wallet type: apple_pay or google_pay"
+            "description": "'apple_pay' or 'google_pay'"
           },
           "payment_token": {
             "type": "string",
             "minLength": 1,
             "title": "Payment Token",
-            "description": "Encrypted or raw wallet payment token"
-          },
-          "currency": {
-            "type": "string",
-            "title": "Currency",
-            "description": "Target currency ISO code",
-            "default": "USD"
+            "description": "Raw payment token from Apple/Google SDK"
           },
           "amount": {
             "type": "number",
             "exclusiveMinimum": 0.0,
-            "title": "Amount",
-            "description": "Payment amount"
+            "title": "Amount"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency",
+            "default": "USD"
           },
           "customer_email": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "email"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Customer Email",
-            "description": "Customer email",
-            "default": "customer@example.com"
+            "title": "Customer Email"
           }
         },
         "type": "object",
@@ -802,74 +994,30 @@
         ],
         "title": "DigitalWalletPaymentRequest"
       },
-      "DigitalWalletPaymentResponse": {
-        "properties": {
-          "transaction_id": {
-            "type": "string",
-            "title": "Transaction Id"
-          },
-          "payment_intent_id": {
-            "type": "string",
-            "title": "Payment Intent Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "amount": {
-            "type": "number",
-            "title": "Amount"
-          },
-          "currency": {
-            "type": "string",
-            "title": "Currency"
-          },
-          "wallet_type": {
-            "type": "string",
-            "title": "Wallet Type"
-          }
-        },
-        "type": "object",
-        "required": [
-          "transaction_id",
-          "payment_intent_id",
-          "status",
-          "amount",
-          "currency",
-          "wallet_type"
-        ],
-        "title": "DigitalWalletPaymentResponse"
-      },
       "ExchangeRateResponse": {
         "properties": {
           "base_currency": {
             "type": "string",
             "title": "Base Currency"
           },
-          "rates": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Rates"
+          "target_currency": {
+            "type": "string",
+            "title": "Target Currency"
+          },
+          "rate": {
+            "type": "number",
+            "title": "Rate"
           },
           "timestamp": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              }
-            ],
+            "type": "string",
             "title": "Timestamp"
           }
         },
         "type": "object",
         "required": [
           "base_currency",
-          "rates",
+          "target_currency",
+          "rate",
           "timestamp"
         ],
         "title": "ExchangeRateResponse"
@@ -892,19 +1040,19 @@
           "transaction_id": {
             "type": "string",
             "title": "Transaction Id",
-            "description": "Transaction ID to refund"
+            "description": "Target transaction ID"
           },
           "amount": {
             "type": "number",
             "exclusiveMinimum": 0.0,
             "title": "Amount",
-            "description": "Refund amount"
+            "description": "Amount to refund"
           },
           "reason": {
             "type": "string",
             "minLength": 1,
             "title": "Reason",
-            "description": "Mandatory refund reason"
+            "description": "Mandatory reason for refund"
           },
           "memo": {
             "anyOf": [
@@ -915,8 +1063,19 @@
                 "type": "null"
               }
             ],
-            "title": "Memo",
-            "description": "Optional internal memo"
+            "title": "Memo"
+          },
+          "refund_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refund Type",
+            "default": "full"
           }
         },
         "type": "object",
@@ -945,24 +1104,16 @@
             "type": "string",
             "title": "Currency"
           },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
           "reason": {
             "type": "string",
             "title": "Reason"
           },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              }
-            ],
+            "type": "string",
             "title": "Created At"
           }
         },
@@ -972,8 +1123,8 @@
           "transaction_id",
           "refund_amount",
           "currency",
-          "status",
           "reason",
+          "status",
           "created_at"
         ],
         "title": "RefundSummary"
@@ -985,28 +1136,49 @@
             "title": "Id"
           },
           "payment_intent_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Payment Intent Id"
           },
           "customer_email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Customer Email"
           },
           "amount": {
             "type": "number",
             "title": "Amount"
           },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
           "base_currency": {
             "type": "string",
-            "title": "Base Currency"
+            "title": "Base Currency",
+            "default": "USD"
+          },
+          "target_currency": {
+            "type": "string",
+            "title": "Target Currency",
+            "default": "USD"
           },
           "converted_amount": {
             "type": "number",
             "title": "Converted Amount"
-          },
-          "target_currency": {
-            "type": "string",
-            "title": "Target Currency"
           },
           "exchange_rate": {
             "type": "number",
@@ -1037,27 +1209,15 @@
             "default": []
           },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              }
-            ],
+            "type": "string",
             "title": "Created At"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "payment_intent_id",
-          "customer_email",
           "amount",
-          "base_currency",
           "converted_amount",
-          "target_currency",
           "exchange_rate",
           "payment_method",
           "status",
@@ -1074,11 +1234,25 @@
             "title": "Id"
           },
           "payment_intent_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Payment Intent Id"
           },
           "customer_email": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Customer Email"
           },
           "amount": {
@@ -1098,23 +1272,13 @@
             "title": "Status"
           },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              }
-            ],
+            "type": "string",
             "title": "Created At"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "payment_intent_id",
-          "customer_email",
           "amount",
           "currency",
           "payment_method",

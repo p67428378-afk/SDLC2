@@ -1,18 +1,15 @@
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
 
-from server.database import Base, get_db, seed_data
+from server.database import get_db, seed_data
+from server.models import Base
 from server.main import app
-import server.models  # noqa: F401
-
-# In-memory SQLite test database with StaticPool to share connection across threads
-TEST_DATABASE_URL = "sqlite:///:memory:"
 
 test_engine = create_engine(
-    TEST_DATABASE_URL,
+    "sqlite:///:memory:",
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
@@ -29,28 +26,24 @@ def setup_test_db():
     Base.metadata.drop_all(bind=test_engine)
 
 
-@pytest.fixture
-def db_session():
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+@pytest.fixture(autouse=True)
+def reset_db_data():
+    db = TestingSessionLocal()
+    seed_data(db)
+    db.close()
+    yield
 
 
 @pytest.fixture
-def client(db_session):
+def client():
     def override_get_db():
+        db = TestingSessionLocal()
         try:
-            yield db_session
+            yield db
         finally:
-            pass
+            db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
+    with TestClient(app) as c:
+        yield c
     app.dependency_overrides.clear()
