@@ -770,8 +770,26 @@
             "title": "Name"
           },
           "price": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Price"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
           },
           "quantity": {
             "type": "integer",
@@ -781,8 +799,7 @@
         },
         "type": "object",
         "required": [
-          "name",
-          "price"
+          "name"
         ],
         "title": "CartItem"
       },

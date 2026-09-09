@@ -25,6 +25,23 @@ def test_create_checkout_session_usd(client: TestClient):
     assert data["exchange_rate"] == 1.0
 
 
+def test_create_checkout_session_with_unit_price(client: TestClient):
+    payload = {
+        "amount": 49.99,
+        "currency": "USD",
+        "customer_email": "unitprice.buyer@example.com",
+        "items": [
+            {"name": "Pro Subscription (Monthly)", "quantity": 1, "unit_price": 49.99}
+        ],
+    }
+    response = client.post("/api/v1/payments/checkout-session", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert "session_id" in data
+    assert "payment_intent_id" in data
+    assert data["base_amount"] == 49.99
+
+
 def test_create_checkout_session_eur_conversion(client: TestClient):
     payload = {
         "amount": 100.00,

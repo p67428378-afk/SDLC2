@@ -1,12 +1,36 @@
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class CartItem(BaseModel):
     id: Optional[str] = None
     name: str
-    price: float
+    price: Optional[float] = None
+    unit_price: Optional[float] = None
     quantity: int = 1
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_price(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            p = data.get("price")
+            up = data.get("unit_price")
+            if p is None and up is not None:
+                data["price"] = up
+            elif up is None and p is not None:
+                data["unit_price"] = p
+        return data
+
+    @model_validator(mode="after")
+    def ensure_price_fields(self) -> "CartItem":
+        if self.price is None and self.unit_price is not None:
+            self.price = self.unit_price
+        elif self.unit_price is None and self.price is not None:
+            self.unit_price = self.price
+        elif self.price is None and self.unit_price is None:
+            self.price = 0.0
+            self.unit_price = 0.0
+        return self
 
 
 class CheckoutSessionRequest(BaseModel):
