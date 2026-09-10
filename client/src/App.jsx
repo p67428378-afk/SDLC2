@@ -107,8 +107,8 @@ export default function App() {
       if (guardrailsRes.status === "fulfilled" && guardrailsRes.value) {
         setGuardrailStatus(guardrailsRes.value);
       }
-    } catch (err) {
-      console.error("Failed to load initial data:", err);
+    } catch {
+      // Fallback to initial state gracefully
     } finally {
       setLoading(false);
     }
@@ -160,8 +160,8 @@ export default function App() {
       if (gRes) {
         setGuardrailStatus(gRes);
       }
-    } catch (e) {
-      console.warn("Scenario evaluation / guardrail check fallback:", e);
+    } catch {
+      // Handled silently with existing state
     }
   };
 

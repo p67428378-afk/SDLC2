@@ -36,7 +36,7 @@ export default function SkuPerformanceTable({
       className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm flex flex-col h-full"
       data-testid="sku-performance-table"
     >
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 shrink-0">
         <div>
           <h2 className="text-lg font-bold text-white">
             SKU Performance Table (Snacks)
@@ -66,20 +66,32 @@ export default function SkuPerformanceTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto flex-1 max-h-[340px] overflow-y-auto border border-slate-750 rounded">
-        <table className="w-full text-left text-xs text-slate-300">
-          <thead className="bg-slate-900 text-slate-400 uppercase font-semibold sticky top-0 z-10">
+      <div className="overflow-x-auto overflow-y-auto flex-1 min-h-[360px] max-h-[480px] border border-slate-700 rounded-lg bg-slate-900/40">
+        <table className="w-full text-left text-xs text-slate-300 border-collapse">
+          <thead className="bg-slate-900 text-slate-400 uppercase font-semibold sticky top-0 z-10 border-b border-slate-700 shadow-sm">
             <tr>
-              <th className="p-2.5">SKU Code</th>
-              <th className="p-2.5">Product Name</th>
-              <th className="p-2.5 text-right">Velocity (/wk)</th>
-              <th className="p-2.5 text-right">Margin %</th>
-              <th className="p-2.5 text-right">Linear Ft</th>
-              <th className="p-2.5 text-center">Private Brand</th>
-              <th className="p-2.5 text-center">Status Badge</th>
+              <th className="px-3.5 py-3 text-xs tracking-wider">SKU Code</th>
+              <th className="px-3.5 py-3 text-xs tracking-wider">
+                Product Name
+              </th>
+              <th className="px-3.5 py-3 text-xs tracking-wider text-right">
+                Velocity (/wk)
+              </th>
+              <th className="px-3.5 py-3 text-xs tracking-wider text-right">
+                Margin %
+              </th>
+              <th className="px-3.5 py-3 text-xs tracking-wider text-right">
+                Linear Ft
+              </th>
+              <th className="px-3.5 py-3 text-xs tracking-wider text-center">
+                Private Brand
+              </th>
+              <th className="px-3.5 py-3 text-xs tracking-wider text-center">
+                Status Badge
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700">
+          <tbody className="divide-y divide-slate-700/80">
             {loading && skus.length === 0 ? (
               <tr>
                 <td colSpan="7" className="p-8 text-center text-slate-400">
@@ -99,46 +111,46 @@ export default function SkuPerformanceTable({
               filteredSkus.map((sku) => (
                 <tr
                   key={sku.id || sku.sku_code}
-                  className="hover:bg-slate-700/50 transition-colors"
+                  className="hover:bg-slate-700/40 transition-colors min-h-[48px]"
                 >
-                  <td className="p-2.5 font-mono text-white font-medium">
+                  <td className="px-3.5 py-3.5 align-middle font-mono text-white font-medium whitespace-nowrap">
                     {sku.sku_code}
                   </td>
-                  <td className="p-2.5 font-medium text-white">
+                  <td className="px-3.5 py-3.5 align-middle font-medium text-white leading-normal">
                     {sku.product_name}
                   </td>
-                  <td className="p-2.5 text-right font-mono">
+                  <td className="px-3.5 py-3.5 align-middle text-right font-mono whitespace-nowrap">
                     {sku.weekly_velocity !== undefined
                       ? Number(sku.weekly_velocity).toFixed(1)
                       : "-"}
                   </td>
-                  <td className="p-2.5 text-right font-mono">
+                  <td className="px-3.5 py-3.5 align-middle text-right font-mono whitespace-nowrap">
                     {sku.margin_pct !== undefined
                       ? `${Number(sku.margin_pct).toFixed(1)}%`
                       : "-"}
                   </td>
-                  <td className="p-2.5 text-right font-mono">
+                  <td className="px-3.5 py-3.5 align-middle text-right font-mono whitespace-nowrap">
                     {sku.linear_feet !== undefined
                       ? Number(sku.linear_feet).toFixed(1)
                       : "-"}
                   </td>
-                  <td className="p-2.5 text-center">
+                  <td className="px-3.5 py-3.5 align-middle text-center whitespace-nowrap">
                     {sku.is_private_brand ? (
-                      <span className="bg-amber-900/50 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-semibold border border-amber-700/40">
+                      <span className="bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-700/40">
                         Yes
                       </span>
                     ) : (
                       <span className="text-slate-500 text-[10px]">No</span>
                     )}
                   </td>
-                  <td className="p-2.5 text-center">
+                  <td className="px-3.5 py-3.5 align-middle text-center whitespace-nowrap">
                     {onActionChange ? (
                       <select
                         value={sku.status_badge || "MAINTAIN"}
                         onChange={(e) =>
                           onActionChange(sku.sku_code, e.target.value)
                         }
-                        className={`text-xs font-bold rounded px-1.5 py-0.5 cursor-pointer bg-slate-900 border focus:outline-none focus:ring-1 focus:ring-[#FFC200] ${getBadgeStyle(
+                        className={`text-xs font-bold rounded px-2 py-1 cursor-pointer bg-slate-900 border focus:outline-none focus:ring-1 focus:ring-[#FFC200] ${getBadgeStyle(
                           sku.status_badge,
                         )}`}
                         aria-label={`Action badge for ${sku.sku_code}`}
@@ -160,7 +172,7 @@ export default function SkuPerformanceTable({
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex justify-between items-center text-[11px] text-slate-400">
+      <div className="mt-3.5 pt-2 flex justify-between items-center text-[11px] text-slate-400 border-t border-slate-700/60 shrink-0">
         <span>
           Showing {filteredSkus.length} of {skus.length} SKUs
         </span>
