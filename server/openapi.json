@@ -1,0 +1,1098 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DG Cluster Assortment Advisor API",
+    "description": "Decision-support API for Dollar General category managers in Small Town Value Cluster stores",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics/kpi": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Get Kpi Metrics",
+        "operationId": "get_kpi_metrics_api_v1_metrics_kpi_get",
+        "parameters": [
+          {
+            "name": "cluster_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Target store cluster",
+              "default": "Small Town Value Cluster",
+              "title": "Cluster Name"
+            },
+            "description": "Target store cluster"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Target merchandise category",
+              "default": "Snacks",
+              "title": "Category"
+            },
+            "description": "Target merchandise category"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterMetricsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/skus": {
+      "get": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "List Skus",
+        "operationId": "list_skus_api_v1_skus_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Product category",
+              "default": "Snacks",
+              "title": "Category"
+            },
+            "description": "Product category"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Offset for pagination"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Max items to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Max items to return"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search term for SKU code or product name",
+              "title": "Search"
+            },
+            "description": "Search term for SKU code or product name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkuListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/skus/{sku_code}": {
+      "get": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "Get Sku By Code",
+        "operationId": "get_sku_by_code_api_v1_skus__sku_code__get",
+        "parameters": [
+          {
+            "name": "sku_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sku Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkuResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/evaluate": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Evaluate Scenario",
+        "operationId": "evaluate_scenario_api_v1_scenarios_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioEvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioEvaluationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "List Scenarios",
+        "operationId": "list_scenarios_api_v1_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScenarioEvaluationResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Scenarios Api V1 Scenarios Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guardrails/check": {
+      "post": {
+        "tags": [
+          "guardrails"
+        ],
+        "summary": "Check Guardrails Endpoint",
+        "operationId": "check_guardrails_endpoint_api_v1_guardrails_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardrailCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuardrailCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Create Submission",
+        "operationId": "create_submission_api_v1_submissions_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "List Submissions",
+        "operationId": "list_submissions_api_v1_submissions_get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditRecordResponse"
+                  },
+                  "title": "Response List Submissions Api V1 Submissions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions/{audit_id}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Get Submission By Audit Id",
+        "operationId": "get_submission_by_audit_id_api_v1_submissions__audit_id__get",
+        "parameters": [
+          {
+            "name": "audit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Audit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditRecordResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Me",
+        "operationId": "get_me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuditRecordResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "audit_id": {
+            "type": "string",
+            "title": "Audit Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "cluster_name": {
+            "type": "string",
+            "title": "Cluster Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "selected_scenario": {
+            "type": "string",
+            "title": "Selected Scenario"
+          },
+          "sku_decisions_json": {
+            "title": "Sku Decisions Json"
+          },
+          "guardrail_status_json": {
+            "title": "Guardrail Status Json"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "audit_id",
+          "user_id",
+          "cluster_name",
+          "category",
+          "selected_scenario",
+          "sku_decisions_json",
+          "guardrail_status_json",
+          "created_at"
+        ],
+        "title": "AuditRecordResponse"
+      },
+      "ClusterMetricsResponse": {
+        "properties": {
+          "cluster_name": {
+            "type": "string",
+            "title": "Cluster Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "sales_per_linear_ft": {
+            "type": "number",
+            "title": "Sales Per Linear Ft"
+          },
+          "private_brand_pct": {
+            "type": "number",
+            "title": "Private Brand Pct"
+          },
+          "in_stock_rate_pct": {
+            "type": "number",
+            "title": "In Stock Rate Pct"
+          },
+          "shelf_capacity_pct": {
+            "type": "number",
+            "title": "Shelf Capacity Pct"
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cluster_name",
+          "category",
+          "sales_per_linear_ft",
+          "private_brand_pct",
+          "in_stock_rate_pct",
+          "shelf_capacity_pct",
+          "last_updated"
+        ],
+        "title": "ClusterMetricsResponse"
+      },
+      "GuardrailCheckRequest": {
+        "properties": {
+          "shelf_capacity_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shelf Capacity Pct",
+            "default": 92.0
+          },
+          "private_brand_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Brand Pct",
+            "default": 28.0
+          },
+          "in_stock_rate_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Stock Rate Pct",
+            "default": 96.5
+          }
+        },
+        "type": "object",
+        "title": "GuardrailCheckRequest"
+      },
+      "GuardrailCheckResponse": {
+        "properties": {
+          "all_passed": {
+            "type": "boolean",
+            "title": "All Passed"
+          },
+          "guardrails": {
+            "items": {
+              "$ref": "#/components/schemas/GuardrailItem"
+            },
+            "type": "array",
+            "title": "Guardrails"
+          }
+        },
+        "type": "object",
+        "required": [
+          "all_passed",
+          "guardrails"
+        ],
+        "title": "GuardrailCheckResponse"
+      },
+      "GuardrailItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "operator": {
+            "type": "string",
+            "title": "Operator"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "message",
+          "value",
+          "threshold",
+          "operator"
+        ],
+        "title": "GuardrailItem"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "ScenarioEvaluateRequest": {
+        "properties": {
+          "cluster_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Name",
+            "default": "Small Town Value Cluster"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "default": "Snacks"
+          },
+          "scenario_type": {
+            "type": "string",
+            "title": "Scenario Type",
+            "description": "Conservative, Balanced, or Aggressive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario_type"
+        ],
+        "title": "ScenarioEvaluateRequest"
+      },
+      "ScenarioEvaluationResponse": {
+        "properties": {
+          "scenario_type": {
+            "type": "string",
+            "title": "Scenario Type"
+          },
+          "projected_sales_lift_pct": {
+            "type": "number",
+            "title": "Projected Sales Lift Pct"
+          },
+          "projected_private_brand_share_pct": {
+            "type": "number",
+            "title": "Projected Private Brand Share Pct"
+          },
+          "projected_margin_delta_pct": {
+            "type": "number",
+            "title": "Projected Margin Delta Pct"
+          },
+          "recommended_sku_actions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Recommended Sku Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario_type",
+          "projected_sales_lift_pct",
+          "projected_private_brand_share_pct",
+          "projected_margin_delta_pct",
+          "recommended_sku_actions"
+        ],
+        "title": "ScenarioEvaluationResponse"
+      },
+      "SkuDecisionItem": {
+        "properties": {
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "GROW, MAINTAIN, SWAP, or REDUCE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sku_code",
+          "action"
+        ],
+        "title": "SkuDecisionItem"
+      },
+      "SkuListResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SkuResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "SkuListResponse"
+      },
+      "SkuResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "weekly_velocity": {
+            "type": "number",
+            "title": "Weekly Velocity"
+          },
+          "margin_pct": {
+            "type": "number",
+            "title": "Margin Pct"
+          },
+          "linear_feet": {
+            "type": "number",
+            "title": "Linear Feet"
+          },
+          "is_private_brand": {
+            "type": "boolean",
+            "title": "Is Private Brand"
+          },
+          "status_badge": {
+            "type": "string",
+            "title": "Status Badge"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sku_code",
+          "product_name",
+          "category",
+          "weekly_velocity",
+          "margin_pct",
+          "linear_feet",
+          "is_private_brand",
+          "status_badge"
+        ],
+        "title": "SkuResponse"
+      },
+      "SubmissionRequest": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id",
+            "default": "usr_cat_mgr_01"
+          },
+          "cluster_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Name",
+            "default": "Small Town Value Cluster"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "default": "Snacks"
+          },
+          "selected_scenario": {
+            "type": "string",
+            "title": "Selected Scenario"
+          },
+          "sku_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SkuDecisionItem"
+            },
+            "type": "array",
+            "title": "Sku Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selected_scenario"
+        ],
+        "title": "SubmissionRequest"
+      },
+      "SubmissionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "audit_id": {
+            "type": "string",
+            "title": "Audit Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "sku_decisions_count": {
+            "type": "integer",
+            "title": "Sku Decisions Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "audit_id",
+          "timestamp",
+          "message",
+          "sku_decisions_count"
+        ],
+        "title": "SubmissionResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "role",
+          "email"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
